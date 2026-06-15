@@ -1,0 +1,67 @@
+[module]
+id           = "notes"
+display_name = "Notes"
+version      = "0.1.0"
+description  = "Prises de notes Markdown, checklists, notebooks, liens bidirectionnels."
+author       = "Kubuno Contributors"
+license      = "AGPL-3.0"
+homepage_url = "https://github.com/kubuno/kubuno"
+runtime      = "rust"
+dependencies = []
+settings_path = "/notes/settings"
+
+[process]
+entrypoint = "kubuno-notes"
+args       = []
+
+[server]
+host = "127.0.0.1"
+port = 3104
+
+[routes]
+patterns = [
+    { method = "*", path = "/*" },
+]
+
+[[sidebar_items]]
+id       = "notes"
+label    = "Notes"
+icon     = "StickyNote"
+path     = "/notes"
+position = 30
+protected_folder = "Notes"
+section  = "main"
+
+[[sidebar_items]]
+id       = "notes-notebooks"
+label    = "Notebooks"
+icon     = "BookOpen"
+path     = "/notes/notebooks"
+position = 31
+section  = "main"
+
+[[sidebar_items]]
+id       = "notes-archive"
+label    = "Archivées"
+icon     = "Archive"
+path     = "/notes/archive"
+position = 32
+section  = "main"
+
+[[sidebar_items]]
+id       = "notes-trash"
+label    = "Corbeille"
+icon     = "Trash2"
+path     = "/notes/trash"
+position = 97
+section  = "secondary"
+
+[events]
+subscribed = [
+    "UserDeleted",
+    "TaskCompleted",
+    "EventCreated",
+]
+publishes = [
+    "NoteCreated",
+]
