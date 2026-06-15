@@ -1,0 +1,29 @@
+# ─── Kubuno Notes — Configuration ─────────────────────────────────────────────
+# Copiez ce fichier en config.toml et adaptez les valeurs.
+# Les variables d'environnement préfixées KN__ surchargent ce fichier.
+# Exemple : KN__SERVER__PORT=3104
+
+[server]
+host = "127.0.0.1"
+port = 3104
+
+[core]
+# URL du core Kubuno (pour l'enregistrement du module)
+url             = "http://127.0.0.1:8080"
+# Secret partagé — doit correspondre à server.internal_secret dans le core
+internal_secret = "change_me"
+
+# ── Base de données ───────────────────────────────────────────────────────────
+# Les paramètres de connexion sont injectés par le superviseur Kubuno via
+# KUBUNO_DB_HOST / KUBUNO_DB_PORT / KUBUNO_DB_USER / KUBUNO_DB_PASSWORD / KUBUNO_DB_NAME.
+# Pour un démarrage hors superviseur, exporter ces variables manuellement.
+
+[notes]
+# Taille max du contenu Markdown (bytes). Défaut : 1 Mo
+max_content_size = 1048576
+# Intervalle du worker de rappels (secondes)
+reminder_check_interval = 30
+
+[logging]
+level  = "info"
+format = "pretty"
