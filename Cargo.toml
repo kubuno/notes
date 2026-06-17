@@ -11,7 +11,7 @@ name = "kubuno-notes"
 path = "src/main.rs"
 
 [dependencies]
-kubuno-drive = { git = "https://github.com/kubuno/drive", tag = "drive-v0.1.0", package = "kubuno-drive", default-features = false }
+kubuno-drive = { path = "/home/martinien/projects/kubuno-drive", default-features = false }
 # Workspace
 tokio          = { workspace = true }
 axum           = { workspace = true }
