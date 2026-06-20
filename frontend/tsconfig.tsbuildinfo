@@ -1,0 +1,1 @@
+{"root":["./src/NotesApp.tsx","./src/NotesFilterPanel.tsx","./src/NotesLogo.tsx","./src/NotesMiniPanel.tsx","./src/NotesNewActions.tsx","./src/NotesRecentWidget.tsx","./src/NotesSettingsPage.tsx","./src/NotesSidebarBody.tsx","./src/NotesToolbar.tsx","./src/api.ts","./src/entry.ts","./src/i18n.ts","./src/store.ts"],"version":"6.0.3"}

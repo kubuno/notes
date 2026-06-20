@@ -143,7 +143,7 @@ function SelectionBar({
   return (
     <div className="sticky top-0 z-20 -mx-6 -mt-6 mb-6 px-6 py-2.5
                     bg-white/95 backdrop-blur border-b border-border
-                    flex items-center gap-1">
+                    flex items-center gap-1 no-print">
       <button
         onClick={onClear}
         title={t('tip_cancel_sel')}
@@ -579,7 +579,7 @@ function QuickNoteBar({ onCreate }: { onCreate: (data: { title?: string; content
   const colorEntry = NOTE_COLORS.find(c => c.id === color) ?? NOTE_COLORS[0]
 
   return (
-    <div className="w-full max-w-xl mx-auto mb-8" ref={containerRef}>
+    <div className="w-full max-w-full sm:max-w-xl mx-auto mb-8 no-print" ref={containerRef}>
       {!open ? (
         <div
           className="flex items-center gap-3 px-4 h-12 bg-white border border-border rounded-xl shadow-sm cursor-text hover:shadow transition-shadow"
