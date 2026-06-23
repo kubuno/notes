@@ -7,6 +7,7 @@
 import { lazy } from 'react'
 import {
   RouteRegistry,
+  ModuleSettingsRegistry,
   WidgetRegistry,
   WaffleAppRegistry,
   FileTypeRegistry,
@@ -37,6 +38,9 @@ export function register() {
   WaffleAppRegistry.register('notes', 'Notes', [
     { id: 'notes', label: 'Notes', Icon: NotesLogo, path: '/notes' },
   ])
+
+  // The header gear button opens the per-user Notes settings while in /notes.
+  ModuleSettingsRegistry.register('notes')
 
   // Type de fichier Kubuno produit par Notes (.kbnot) — filtrage + icône + ouverture.
   FileTypeRegistry.register({
