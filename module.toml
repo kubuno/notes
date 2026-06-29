@@ -1,7 +1,7 @@
 [module]
 id           = "notes"
 display_name = "Notes"
-version      = "0.1.0"
+version      = "0.1.2"
 description  = "Prises de notes Markdown, checklists, notebooks, liens bidirectionnels."
 author       = "Kubuno Contributors"
 license      = "AGPL-3.0"
@@ -37,6 +37,7 @@ id       = "notes-notebooks"
 label    = "Notebooks"
 icon     = "BookOpen"
 path     = "/notes/notebooks"
+launchable = false
 position = 31
 section  = "main"
 
@@ -45,6 +46,7 @@ id       = "notes-archive"
 label    = "Archivées"
 icon     = "Archive"
 path     = "/notes/archive"
+launchable = false
 position = 32
 section  = "main"
 
@@ -53,6 +55,7 @@ id       = "notes-trash"
 label    = "Corbeille"
 icon     = "Trash2"
 path     = "/notes/trash"
+launchable = false
 position = 97
 section  = "secondary"
 
