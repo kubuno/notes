@@ -1,7 +1,7 @@
 [module]
 id           = "notes"
 display_name = "Notes"
-version      = "0.1.2"
+version      = "0.1.3"
 description  = "Prises de notes Markdown, checklists, notebooks, liens bidirectionnels."
 author       = "Kubuno Contributors"
 license      = "AGPL-3.0"
