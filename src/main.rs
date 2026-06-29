@@ -41,6 +41,14 @@ struct SidebarItemRaw {
     position: i32,
     #[serde(default)]
     protected_folder: Option<String>,
+    /// `false` for internal views/filters (Notebooks, Archive, Trash…) that are not
+    /// launchable apps. Defaults to `true` for backward compatibility.
+    #[serde(default = "default_launchable")]
+    launchable: bool,
+}
+
+fn default_launchable() -> bool {
+    true
 }
 
 #[derive(Deserialize)]
@@ -223,9 +231,10 @@ async fn register_with_core(http: &Client, settings: &Settings) {
             "path":     s.path,
             "position": s.position,
             "protected_folder": s.protected_folder,
+            "launchable": s.launchable,
         })).collect())
         .unwrap_or_else(|| vec![
-            json!({ "id": "notes", "label": "Notes", "icon": "FileText", "path": "/notes", "position": 30, "protected_folder": "Notes" }),
+            json!({ "id": "notes", "label": "Notes", "icon": "FileText", "path": "/notes", "position": 30, "protected_folder": "Notes", "launchable": true }),
         ]);
     let subscribed_events: Vec<String> = manifest.as_ref()
         .and_then(|m| m.events.as_ref())
