@@ -18,14 +18,15 @@ pub async fn list_labels(db: &PgPool, owner_id: Uuid) -> Result<Vec<Label>> {
 pub async fn create_label(db: &PgPool, owner_id: Uuid, dto: CreateLabelDto) -> Result<Label> {
     let color = dto.color.as_deref().unwrap_or("#1a73e8");
     let label = sqlx::query_as::<_, Label>(
-        r#"INSERT INTO labels (owner_id, name, color, position)
-           VALUES ($1, $2, $3, $4)
+        r#"INSERT INTO labels (id, owner_id, name, color, position)
+           VALUES (COALESCE($5, uuid_generate_v4()), $1, $2, $3, $4)
            RETURNING *"#,
     )
     .bind(owner_id)
     .bind(&dto.name)
     .bind(color)
     .bind(dto.position.unwrap_or(0))
+    .bind(dto.id)
     .fetch_one(db)
     .await
     .context("create_label")?;

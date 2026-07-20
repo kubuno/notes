@@ -112,8 +112,8 @@ pub async fn create_note(state: &AppState, owner_id: Uuid, dto: CreateNoteDto) -
 
     let mut note = sqlx::query_as::<_, Note>(
         r#"INSERT INTO notes
-           (owner_id, notebook_id, title, file_id, preview, note_type, color, checklist, is_pinned, word_count, search_vector)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+           (id, owner_id, notebook_id, title, file_id, preview, note_type, color, checklist, is_pinned, word_count, search_vector)
+           VALUES (COALESCE($12, uuid_generate_v4()), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
                setweight(to_tsvector('french', unaccent(COALESCE($3, ''))), 'A') ||
                setweight(to_tsvector('french', unaccent($11)),               'B'))
            RETURNING *"#,
@@ -129,6 +129,7 @@ pub async fn create_note(state: &AppState, owner_id: Uuid, dto: CreateNoteDto) -
     .bind(dto.is_pinned.unwrap_or(false))
     .bind(word_count)
     .bind(&content)
+    .bind(dto.id)
     .fetch_one(&state.db)
     .await
     .context("create_note")?;

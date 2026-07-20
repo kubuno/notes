@@ -1,3 +1,4 @@
+pub mod delta;
 pub mod graph;
 pub mod health;
 pub mod labels;
