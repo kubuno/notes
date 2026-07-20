@@ -22,8 +22,8 @@ pub async fn create_notebook(
 ) -> Result<Notebook> {
     let icon = dto.icon.as_deref().unwrap_or("📁");
     let notebook = sqlx::query_as::<_, Notebook>(
-        r#"INSERT INTO notebooks (owner_id, parent_id, name, icon, color)
-           VALUES ($1, $2, $3, $4, $5)
+        r#"INSERT INTO notebooks (id, owner_id, parent_id, name, icon, color)
+           VALUES (COALESCE($6, uuid_generate_v4()), $1, $2, $3, $4, $5)
            RETURNING *"#,
     )
     .bind(owner_id)
@@ -31,6 +31,7 @@ pub async fn create_notebook(
     .bind(&dto.name)
     .bind(icon)
     .bind(dto.color.as_deref())
+    .bind(dto.id)
     .fetch_one(db)
     .await
     .context("create_notebook")?;

@@ -6,7 +6,7 @@ use axum::{
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 use crate::{
-    handlers::{graph, health, labels, notebooks, notes, public, reminders, search, shares},
+    handlers::{delta, graph, health, labels, notebooks, notes, public, reminders, search, shares},
     middleware::require_auth,
     state::AppState,
 };
@@ -15,6 +15,9 @@ pub fn build(state: AppState) -> Router {
     let authed = Router::new()
         // Notes
         .route("/notes",                        get(notes::list).post(notes::create))
+        .route("/notes/delta",                  get(delta::notes_delta))
+        .route("/notebooks/delta",              get(delta::notebooks_delta))
+        .route("/labels/delta",                 get(delta::labels_delta))
         .route("/notes/open-by-file",           post(notes::open_by_file))
         .route("/notes/trash",                  delete(notes::empty_trash))
         .route("/notes/:id",                    get(notes::get).patch(notes::update))
