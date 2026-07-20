@@ -7,6 +7,7 @@ import { FloatCheckbox } from '@ui'
 import { MenuDropdown, type MenuDropdownPos } from '@ui'
 import DOMPurify from 'dompurify'
 import { useDraggable } from '@kubuno/sdk'
+import { readKubunoData, kubunoDataToMarkdown } from './kubunoData'
 import {
   Pin, Archive, BookOpen,
   MoreHorizontal, Share2, Copy, Trash, Check,
@@ -538,6 +539,19 @@ function NoteEditor({ note, onClose, onUpdate, onArchive }: NoteEditorProps) {
           rows={8}
           value={content}
           onChange={e => { setContent(e.target.value); scheduleSave(title, e.target.value) }}
+          onPaste={e => {
+            // Cross-module data paste: insert a readable markdown block instead
+            // of the envelope's plain-text fallback.
+            const env = readKubunoData(e.clipboardData)
+            if (!env) return
+            e.preventDefault()
+            const ta = e.currentTarget
+            const start = ta.selectionStart ?? content.length
+            const end = ta.selectionEnd ?? start
+            const next = content.slice(0, start) + kubunoDataToMarkdown(env) + content.slice(end)
+            setContent(next)
+            scheduleSave(title, next)
+          }}
         />
         <NoteEditorToolbar
           dark={isDark} color={color}
@@ -623,6 +637,16 @@ function QuickNoteBar({ onCreate }: { onCreate: (data: { title?: string; content
             rows={3}
             value={content}
             onChange={e => setContent(e.target.value)}
+            onPaste={e => {
+              // Cross-module data paste: insert a readable markdown block.
+              const env = readKubunoData(e.clipboardData)
+              if (!env) return
+              e.preventDefault()
+              const ta = e.currentTarget
+              const start = ta.selectionStart ?? content.length
+              const end = ta.selectionEnd ?? start
+              setContent(content.slice(0, start) + kubunoDataToMarkdown(env) + content.slice(end))
+            }}
           />
           <NoteEditorToolbar dark={false} color={color} onColorChange={setColor} onArchive={handleClose} onClose={handleClose} />
         </div>

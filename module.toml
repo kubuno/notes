@@ -68,3 +68,48 @@ subscribed = [
 publishes = [
     "NoteCreated",
 ]
+
+# ── Déclaration des paramètres (architecture module-settings du core) ─────────
+# Poussés au core à l'enregistrement (settings_schema) : les réglages globaux se
+# gèrent dans la console d'administration (Modules → Notes → réglages).
+
+[[settings]]
+key     = "default_editor"
+scope   = "global"
+type    = "enum"
+default = "wysiwyg"
+label   = "Mode éditeur par défaut"
+description = "Éditeur proposé à l'ouverture d'une nouvelle note."
+values  = [
+    { value = "wysiwyg",  label = "Éditeur visuel (WYSIWYG)" },
+    { value = "markdown", label = "Markdown" },
+]
+
+[[settings]]
+key     = "autosave_interval_s"
+scope   = "global"
+type    = "int"
+default = 30
+label   = "Intervalle auto-save (secondes)"
+description = "0 pour désactiver l'enregistrement automatique."
+
+[[settings]]
+key     = "enable_spell_check"
+scope   = "global"
+type    = "bool"
+default = true
+label   = "Correcteur orthographique actif"
+
+[[settings]]
+key     = "enable_bidirectional_links"
+scope   = "global"
+type    = "bool"
+default = true
+label   = "Liens bidirectionnels actifs"
+
+[[settings]]
+key     = "default_reminder_before_min"
+scope   = "global"
+type    = "int"
+default = 60
+label   = "Rappel par défaut avant échéance (min)"
