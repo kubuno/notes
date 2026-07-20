@@ -1,0 +1,104 @@
+name: Distributions (RPM / Windows / macOS + bundles marketplace)
+
+# Sur tag v*, attache à la Release GitHub :
+#  - les INSTALLEURS manuels : .rpm (Linux), .exe NSIS (Windows), .pkg (macOS) ;
+#  - les BUNDLES extractibles par le CORE (marketplace) : archives plates
+#    `kubuno-<id>-<ver>-<os>-<arch>.{tar.gz|zip}` que le core télécharge selon son
+#    OS/arch, vérifie (SHA-256) et extrait dans son store. Voir build_bundle.sh.
+# Complète build.yml (qui produit le .deb Linux).
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: sudo apt-get update && sudo apt-get install -y rpm
+      - run: cd frontend && npm ci && npm run build
+        if: hashFiles('frontend/package.json') != ''
+      - run: bash build_rpm.sh
+        env: { SQLX_OFFLINE: "true" }
+      # Bundle extractible Linux (installé à l'exécution par le core / marketplace).
+      - run: bash build_bundle.sh
+        env: { SQLX_OFFLINE: "true" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            dist/*.rpm
+            dist/*-linux-*.tar.gz*
+      - if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.rpm
+            dist/*-linux-*.tar.gz*
+
+  windows:
+    runs-on: windows-latest
+    defaults: { run: { shell: bash } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: x86_64-pc-windows-msvc }
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: choco install nsis -y --no-progress
+      - run: echo "C:/Program Files (x86)/NSIS" >> "$GITHUB_PATH"
+      - run: if [ -f frontend/package.json ]; then cd frontend && npm ci && npm run build; fi
+      - run: bash build_windows.sh
+        env: { SQLX_OFFLINE: "true" }
+      # Bundle .zip extractible (le core l'extrait via la crate zip, sans outil Windows).
+      - run: bash build_bundle.sh
+        env: { SQLX_OFFLINE: "true", TARGET: x86_64-pc-windows-msvc }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            dist/*.exe
+            dist/*-windows-*.zip*
+      - if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.exe
+            dist/*-windows-*.zip*
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: aarch64-apple-darwin }
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: if [ -f frontend/package.json ]; then cd frontend && npm ci && npm run build; fi
+      - run: bash build_macos.sh
+        env: { SQLX_OFFLINE: "true" }
+      # Bundle .tar.gz extractible (arm64 ; ajouter x86_64 si besoin via une matrice).
+      - run: bash build_bundle.sh
+        env: { SQLX_OFFLINE: "true", TARGET: aarch64-apple-darwin }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: |
+            dist/*.pkg
+            dist/*-macos-*.tar.gz*
+      - if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.pkg
+            dist/*-macos-*.tar.gz*
