@@ -174,11 +174,14 @@ interface NotesSettings {
 
 function useAdminSettings() {
   return useQuery({
-    queryKey: ['admin-settings'],
+    queryKey: ['notes-module-config'],
     queryFn: () =>
-      api.get<{ settings: { key: string; value: unknown }[] }>('/admin/settings').then((r) => {
+      // Standard module-settings endpoint: since the notes settings are owned by
+      // the module (settings_schema), the general /admin/settings no longer
+      // lists them. Keys come back unprefixed; `global` holds the instance value.
+      api.get<{ settings: { key: string; global: unknown; effective: unknown }[] }>('/modules/notes/config').then((r) => {
         const map: Record<string, unknown> = {}
-        r.data.settings.forEach((s) => { map[s.key] = s.value })
+        r.data.settings.forEach((s) => { map[`notes.${s.key}`] = s.global ?? s.effective })
         return map as unknown as NotesSettings
       }),
   })
@@ -216,7 +219,7 @@ function EditorTab() {
   const save = useMutation({
     mutationFn: (updates: Record<string, unknown>) => api.patch('/admin/settings', updates),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-settings'] })
+      queryClient.invalidateQueries({ queryKey: ['notes-module-config'] })
       setEditorMode(null)
       setAutosave(null)
       setSpellCheck(null)
@@ -337,7 +340,7 @@ function RemindersTab() {
   const save = useMutation({
     mutationFn: (updates: Record<string, unknown>) => api.patch('/admin/settings', updates),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-settings'] })
+      queryClient.invalidateQueries({ queryKey: ['notes-module-config'] })
       setReminderMin(null)
     },
   })
