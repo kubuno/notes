@@ -39,11 +39,9 @@ jobs:
             dist/*.rpm
             dist/*-linux-*.tar.gz*
       - if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/*.rpm
-            dist/*-linux-*.tar.gz*
+        name: upload to release
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: bash .github/upload-asset.sh 'dist/*.rpm dist/*-linux-*.tar.gz*'
 
   windows:
     runs-on: windows-latest
@@ -71,11 +69,9 @@ jobs:
             dist/*.exe
             dist/*-windows-*.zip*
       - if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/*.exe
-            dist/*-windows-*.zip*
+        name: upload to release
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: bash .github/upload-asset.sh 'dist/*.exe dist/*-windows-*.zip*'
 
   macos:
     runs-on: macos-latest
@@ -100,8 +96,6 @@ jobs:
             dist/*.pkg
             dist/*-macos-*.tar.gz*
       - if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/*.pkg
-            dist/*-macos-*.tar.gz*
+        name: upload to release
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: bash .github/upload-asset.sh 'dist/*.pkg dist/*-macos-*.tar.gz*'
