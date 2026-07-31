@@ -4,12 +4,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, useAuthStore } from '@kubuno/sdk'
 import { StickyNote, Save, ArrowLeft, ExternalLink, Check } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { Toggle, Button, Radio } from '@ui'
+import { Toggle, Button, Radio, useSaveShortcut} from '@ui'
 import { useModulePrefs } from './userPrefs'
 
 // ── Per-user preferences (backend, cross-device via core users.preferences) ─────
 
-interface NotesPrefs {
+// `type`, not `interface`: only a type alias gets the implicit index signature
+// that `useModulePrefs<T extends Record<string, unknown>>` requires.
+type NotesPrefs = {
   font:        string   // 'sans' | 'serif' | 'mono'
   fontSize:    string   // 'sm' | 'md' | 'lg'
   sort:        string   // 'updated' | 'created' | 'title'
@@ -62,6 +64,9 @@ function PreferencesTab() {
 
   const set = <K extends keyof NotesPrefs>(key: K, value: NotesPrefs[K]) =>
     setPrefs(p => ({ ...p, [key]: value }))
+
+  // Ctrl+S saves immediately (disabled while a save is in flight).
+  useSaveShortcut(() => { void save() }, !busy)
 
   const save = async () => {
     setBusy(true)
