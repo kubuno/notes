@@ -118,8 +118,9 @@ export default function NotesMiniPanel() {
         </button>
       </div>
 
-      {/* Liste des notes */}
-      <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-2 pt-2 bg-surface-1">
+      {/* Liste des notes — pas de fond propre : le panneau de droite du shell fournit
+          le blanc, et le teinter ici le recouvrait sur la moitié basse. */}
+      <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-2 pt-2">
         {isLoading && (
           <div className="space-y-2 px-2 pt-1">
             {[1, 2, 3, 4].map((i) => (

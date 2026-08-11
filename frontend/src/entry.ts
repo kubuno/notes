@@ -83,7 +83,7 @@ export function register() {
 
   useRightPanelStore.getState().registerEntry({
     moduleId:       'notes',
-    icon:           FileText,
+    icon:           NotesLogo,
     label:          'Notes',
     panelComponent: NotesMiniPanel,
   })

@@ -6,3 +6,4 @@ pub mod note_service;
 pub mod notebook_service;
 pub mod reminder_service;
 pub mod search_service;
+pub mod usage;
