@@ -1,10 +1,8 @@
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api, useAuthStore } from '@kubuno/sdk'
-import { StickyNote, Save, ArrowLeft, ExternalLink, Check } from 'lucide-react'
+import { StickyNote, ArrowLeft, ExternalLink, Check } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { Toggle, Button, Radio, useSaveShortcut} from '@ui'
+import { Toggle, Button, Radio, useSaveShortcut } from '@ui'
 import { useModulePrefs } from './userPrefs'
 
 // ── Per-user preferences (backend, cross-device via core users.preferences) ─────
@@ -167,231 +165,6 @@ function PreferencesTab() {
   )
 }
 
-// ── Admin-only global settings (instance, via /admin/settings) ──────────────────
-
-interface NotesSettings {
-  'notes.default_editor': string
-  'notes.autosave_interval_s': number
-  'notes.enable_spell_check': boolean
-  'notes.enable_bidirectional_links': boolean
-  'notes.default_reminder_before_min': number
-}
-
-function useAdminSettings() {
-  return useQuery({
-    queryKey: ['notes-module-config'],
-    queryFn: () =>
-      // Standard module-settings endpoint: since the notes settings are owned by
-      // the module (settings_schema), the general /admin/settings no longer
-      // lists them. Keys come back unprefixed; `global` holds the instance value.
-      api.get<{ settings: { key: string; global: unknown; effective: unknown }[] }>('/modules/notes/config').then((r) => {
-        const map: Record<string, unknown> = {}
-        r.data.settings.forEach((s) => { map[`notes.${s.key}`] = s.global ?? s.effective })
-        return map as unknown as NotesSettings
-      }),
-  })
-}
-
-function EditorTab() {
-  const { t } = useTranslation('notes')
-  const queryClient = useQueryClient()
-  const { data: settings } = useAdminSettings()
-
-  const EDITOR_OPTIONS = [
-    { value: 'wysiwyg',  label: t('notes_editor_wysiwyg'),  desc: t('notes_editor_wysiwyg_desc') },
-    { value: 'markdown', label: t('notes_editor_markdown'), desc: t('notes_editor_markdown_desc') },
-  ]
-
-  const AUTOSAVE_OPTIONS = [
-    { value: 5,   label: t('notes_autosave_5s') },
-    { value: 30,  label: t('notes_autosave_30s') },
-    { value: 60,  label: t('notes_autosave_1m') },
-    { value: 0,   label: t('notes_autosave_off') },
-  ]
-
-  const [editorMode, setEditorMode]   = useState<string | null>(null)
-  const [autosave, setAutosave]       = useState<number | null>(null)
-  const [spellCheck, setSpellCheck]   = useState<boolean | null>(null)
-  const [biLinks, setBiLinks]         = useState<boolean | null>(null)
-
-  const currentEditor     = editorMode  ?? (settings?.['notes.default_editor']             ?? 'wysiwyg')
-  const currentAutosave   = autosave    ?? (settings?.['notes.autosave_interval_s']         ?? 30)
-  const currentSpellCheck = spellCheck  ?? (settings?.['notes.enable_spell_check']          ?? true)
-  const currentBiLinks    = biLinks     ?? (settings?.['notes.enable_bidirectional_links']  ?? true)
-
-  const isDirty = editorMode !== null || autosave !== null || spellCheck !== null || biLinks !== null
-
-  const save = useMutation({
-    mutationFn: (updates: Record<string, unknown>) => api.patch('/admin/settings', updates),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notes-module-config'] })
-      setEditorMode(null)
-      setAutosave(null)
-      setSpellCheck(null)
-      setBiLinks(null)
-    },
-  })
-
-  function handleSave() {
-    const updates: Record<string, unknown> = {}
-    if (editorMode  !== null) updates['notes.default_editor']            = editorMode
-    if (autosave    !== null) updates['notes.autosave_interval_s']       = autosave
-    if (spellCheck  !== null) updates['notes.enable_spell_check']        = spellCheck
-    if (biLinks     !== null) updates['notes.enable_bidirectional_links'] = biLinks
-    if (Object.keys(updates).length > 0) save.mutate(updates)
-  }
-
-  return (
-    <div>
-      <div className="bg-white rounded-xl border border-border divide-y divide-border">
-        {/* Editor mode */}
-        <div className="p-5">
-          <p className="text-sm font-medium text-text-primary mb-1">{t('notes_default_editor_mode')}</p>
-          <p className="text-xs text-text-secondary mb-3">
-            {t('notes_default_editor_mode_desc')}
-          </p>
-          <div className="flex gap-3">
-            {EDITOR_OPTIONS.map(opt => (
-              <button
-                key={opt.value}
-                onClick={() => setEditorMode(opt.value)}
-                className={`flex-1 max-w-[180px] py-3 rounded-xl border text-center transition-colors ${
-                  currentEditor === opt.value
-                    ? 'border-primary bg-primary-light text-primary'
-                    : 'border-border hover:bg-surface-1 text-text-secondary'
-                }`}
-              >
-                <p className="text-sm font-semibold">{opt.label}</p>
-                <p className="text-xs mt-0.5 opacity-70">{opt.desc}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Autosave */}
-        <div className="p-5">
-          <p className="text-sm font-medium text-text-primary mb-1">{t('notes_autosave_interval')}</p>
-          <p className="text-xs text-text-secondary mb-3">
-            {t('notes_autosave_interval_desc')}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {AUTOSAVE_OPTIONS.map(opt => (
-              <button
-                key={opt.value}
-                onClick={() => setAutosave(opt.value)}
-                className={`px-4 py-1.5 rounded-full text-sm border transition-colors ${
-                  currentAutosave === opt.value
-                    ? 'border-primary bg-primary-light text-primary font-medium'
-                    : 'border-border hover:bg-surface-1 text-text-secondary'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Spell check toggle */}
-        <div className="p-5 flex items-start justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium text-text-primary">{t('notes_spell_check')}</p>
-            <p className="text-xs text-text-secondary mt-0.5">
-              {t('notes_spell_check_desc')}
-            </p>
-          </div>
-          <Toggle checked={currentSpellCheck} onChange={() => setSpellCheck(!currentSpellCheck)} />
-        </div>
-
-        {/* Bidirectional links toggle */}
-        <div className="p-5 flex items-start justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium text-text-primary">{t('notes_bidi_links')}</p>
-            <p className="text-xs text-text-secondary mt-0.5">
-              {t('notes_bidi_links_desc')} <code className="font-mono bg-surface-2 px-1 rounded text-xs">[[{t('notes_bidi_links_syntax')}]]</code>.
-              {' '}{t('notes_bidi_links_desc2')}
-            </p>
-          </div>
-          <Toggle checked={currentBiLinks} onChange={() => setBiLinks(!currentBiLinks)} />
-        </div>
-      </div>
-
-      <div className="mt-4 flex justify-end">
-        <Button onClick={handleSave} disabled={!isDirty || save.isPending}>
-          <Save size={15} />
-          {save.isPending ? t('notes_saving') : t('common_save')}
-        </Button>
-      </div>
-    </div>
-  )
-}
-
-function RemindersTab() {
-  const { t } = useTranslation('notes')
-  const queryClient = useQueryClient()
-  const { data: settings } = useAdminSettings()
-
-  const REMINDER_OPTIONS = [
-    { value: 0,    label: t('notes_reminder_ontime') },
-    { value: 15,   label: t('notes_reminder_15m') },
-    { value: 60,   label: t('notes_reminder_1h') },
-    { value: 1440, label: t('notes_reminder_1d') },
-  ]
-
-  const [reminderMin, setReminderMin] = useState<number | null>(null)
-
-  const currentReminder = reminderMin ?? (settings?.['notes.default_reminder_before_min'] ?? 60)
-  const isDirty = reminderMin !== null
-
-  const save = useMutation({
-    mutationFn: (updates: Record<string, unknown>) => api.patch('/admin/settings', updates),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notes-module-config'] })
-      setReminderMin(null)
-    },
-  })
-
-  return (
-    <div>
-      <div className="bg-white rounded-xl border border-border divide-y divide-border">
-        <div className="p-5">
-          <p className="text-sm font-medium text-text-primary mb-1">
-            {t('notes_default_reminder')}
-          </p>
-          <p className="text-xs text-text-secondary mb-3">
-            {t('notes_default_reminder_desc')}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {REMINDER_OPTIONS.map(opt => (
-              <button
-                key={opt.value}
-                onClick={() => setReminderMin(opt.value)}
-                className={`px-4 py-1.5 rounded-full text-sm border transition-colors ${
-                  currentReminder === opt.value
-                    ? 'border-primary bg-primary-light text-primary font-medium'
-                    : 'border-border hover:bg-surface-1 text-text-secondary'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-4 flex justify-end">
-        <Button
-          icon={<Save size={15} />}
-          onClick={() => { if (reminderMin !== null) save.mutate({ 'notes.default_reminder_before_min': reminderMin }) }}
-          disabled={!isDirty}
-          loading={save.isPending}
-        >
-          {save.isPending ? t('notes_saving') : t('common_save')}
-        </Button>
-      </div>
-    </div>
-  )
-}
-
 function AboutTab() {
   const { t } = useTranslation('notes')
   return (
@@ -458,21 +231,18 @@ function AboutTab() {
 
 // ── Main page (mail-style breadcrumb + tab bar) ─────────────────────────────────
 
-type Tab = 'preferences' | 'editor' | 'reminders' | 'about'
+// Per-user only. Instance-wide settings (editor behaviour) moved to the core
+// admin console (Modules ▸ Notes ▸ Éditeur); they are no longer edited here.
+type Tab = 'preferences' | 'about'
 
 export default function NotesSettingsPage() {
   const { t } = useTranslation('notes')
-  const isAdmin = useAuthStore(s => s.user?.role === 'admin')
   const [tab, setTab] = useState<Tab>('preferences')
 
-  // Admin-only tabs (instance-wide settings) are hidden for non-admins.
-  const tabs: { id: Tab; label: string; adminOnly?: boolean }[] = [
+  const visibleTabs: { id: Tab; label: string }[] = [
     { id: 'preferences', label: t('notes_tab_preferences', { defaultValue: 'Préférences' }) },
-    { id: 'editor',      label: t('notes_tab_editor'),    adminOnly: true },
-    { id: 'reminders',   label: t('notes_tab_reminders'), adminOnly: true },
     { id: 'about',       label: t('notes_tab_about') },
   ]
-  const visibleTabs = tabs.filter(tb => !tb.adminOnly || isAdmin)
 
   return (
     <div className="flex flex-col h-full bg-white overflow-hidden">
@@ -503,10 +273,8 @@ export default function NotesSettingsPage() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-8 py-6">
-          {tab === 'preferences'           && <PreferencesTab />}
-          {tab === 'editor'    && isAdmin   && <EditorTab />}
-          {tab === 'reminders' && isAdmin   && <RemindersTab />}
-          {tab === 'about'                  && <AboutTab />}
+          {tab === 'preferences' && <PreferencesTab />}
+          {tab === 'about'       && <AboutTab />}
         </div>
       </div>
     </div>

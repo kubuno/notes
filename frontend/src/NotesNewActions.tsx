@@ -1,36 +1,32 @@
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { useTranslation } from 'react-i18next'
+import type { MenuItem } from '@ui'
+import { i18n, navigate } from '@kubuno/sdk'
 import { FileText, CheckSquare } from 'lucide-react'
-import { useNavigate, useLocation } from 'react-router-dom'
 import { useNotesStore } from './store'
 
-const ITEM_CLASS =
-  'flex items-center gap-3 w-full px-3 py-2 text-sm text-text-primary ' +
-  'hover:bg-surface-1 cursor-pointer outline-none'
-
-export default function NotesNewActions() {
-  const navigate    = useNavigate()
-  const { t }       = useTranslation('notes')
-  const { pathname } = useLocation()
-  const createNote  = useNotesStore((s) => s.createNote)
-
-  if (!pathname.startsWith('/notes')) return null
+/**
+ * Items for the sidebar "New" button (`shell.new-actions` extension point).
+ * Built when the menu opens — fresh labels and store state, no hooks.
+ */
+export function newActionItems(): MenuItem[] {
+  if (!window.location.pathname.startsWith('/notes')) return []
 
   const handleNew = async (type: 'text' | 'checklist') => {
-    const note = await createNote({ note_type: type })
+    const note = await useNotesStore.getState().createNote({ note_type: type })
     navigate(`/notes/${note.id}`)
   }
 
-  return (
-    <>
-      <DropdownMenu.Item onSelect={() => handleNew('text')} className={ITEM_CLASS}>
-        <FileText size={16} className="text-text-secondary" />
-        {t('notes_new_note')}
-      </DropdownMenu.Item>
-      <DropdownMenu.Item onSelect={() => handleNew('checklist')} className={ITEM_CLASS}>
-        <CheckSquare size={16} className="text-text-secondary" />
-        {t('notes_new_list')}
-      </DropdownMenu.Item>
-    </>
-  )
+  return [
+    {
+      type: 'action',
+      label: i18n.t('notes:notes_new_note'),
+      icon: <FileText size={16} />,
+      onClick: () => { void handleNew('text') },
+    },
+    {
+      type: 'action',
+      label: i18n.t('notes:notes_new_list'),
+      icon: <CheckSquare size={16} />,
+      onClick: () => { void handleNew('checklist') },
+    },
+  ]
 }

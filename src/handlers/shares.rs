@@ -34,6 +34,12 @@ pub struct CreateShareDto {
     pub expires_in_days: Option<i64>,
 }
 
+/// Instant `days` days from now. Split out because the expiry is computed from
+/// three different branches of the ceiling rules below.
+fn days_from_now(days: i64) -> chrono::DateTime<chrono::Utc> {
+    chrono::Utc::now() + chrono::Duration::days(days)
+}
+
 pub async fn list(
     State(state): State<AppState>,
     Extension(user): Extension<NotesUser>,
@@ -57,6 +63,12 @@ pub async fn create(
     Path(note_id): Path<Uuid>,
     Json(dto): Json<CreateShareDto>,
 ) -> Result<(StatusCode, Json<Value>)> {
+    // Instance policy first: no link may be minted while sharing is off.
+    let cfg = state.instance();
+    if !cfg.allow_public_sharing {
+        return Err(NotesError::Forbidden);
+    }
+
     // Vérifier ownership
     let exists: bool = sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM notes WHERE id = $1 AND owner_id = $2)",
@@ -75,9 +87,16 @@ pub async fn create(
     rand::thread_rng().fill_bytes(&mut token_bytes);
     let token = URL_SAFE_NO_PAD.encode(token_bytes);
 
-    let expires_at = dto.expires_in_days.map(|d| {
-        chrono::Utc::now() + chrono::Duration::days(d)
-    });
+    // Lifetime ceiling: an unbounded link, or one asking for longer than the
+    // administrator allows, is clamped instead of refused — the user still gets
+    // a link, it just does not outlive the policy. `0` means "no ceiling".
+    let requested = dto.expires_in_days.filter(|d| *d > 0);
+    let expires_at = match (requested, cfg.share_link_max_days) {
+        (_, 0)                            => requested.map(days_from_now),
+        (None, ceiling)                   => Some(days_from_now(ceiling)),
+        (Some(d), ceiling) if d > ceiling => Some(days_from_now(ceiling)),
+        (Some(d), _)                      => Some(days_from_now(d)),
+    };
 
     let share = sqlx::query_as::<_, NoteShare>(
         r#"INSERT INTO shares (note_id, created_by, token, expires_at)

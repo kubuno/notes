@@ -73,43 +73,116 @@ publishes = [
 # Poussés au core à l'enregistrement (settings_schema) : les réglages globaux se
 # gèrent dans la console d'administration (Modules → Notes → réglages).
 
-[[settings]]
-key     = "default_editor"
-scope   = "global"
-type    = "enum"
-default = "wysiwyg"
-label   = "Mode éditeur par défaut"
-description = "Éditeur proposé à l'ouverture d'une nouvelle note."
-values  = [
-    { value = "wysiwyg",  label = "Éditeur visuel (WYSIWYG)" },
-    { value = "markdown", label = "Markdown" },
-]
+# ── Admin panel page ──────────────────────────────────────────────────────────
+# Becomes the "Éditeur" entry of the admin menu (Modules → Notes / editor).
+#
+# NOTE: "default_editor" and "default_reminder_before_min" were REMOVED — the
+# note editor is a single textarea (no WYSIWYG/Markdown switch to default) and
+# the reminder UI is not wired, so those two had no point of application.
+# Declaring them back would be decorative. Re-add them only once they take effect.
+
+[[setting_groups]]
+id          = "editor"
+label       = "Éditeur"
+icon        = "PenLine"
+position    = 1
+description  = "Le comportement de l'éditeur de notes : sauvegarde automatique, correcteur orthographique, liens bidirectionnels."
 
 [[settings]]
 key     = "autosave_interval_s"
 scope   = "global"
+group   = "editor"
+public  = true
 type    = "int"
 default = 30
-label   = "Intervalle auto-save (secondes)"
-description = "0 pour désactiver l'enregistrement automatique."
+min     = 0
+max     = 3600
+unit    = "s"
+label   = "Intervalle de sauvegarde automatique (secondes)"
+description = "Délai entre deux enregistrements automatiques d'une note. 0 désactive la sauvegarde automatique."
 
 [[settings]]
 key     = "enable_spell_check"
 scope   = "global"
+group   = "editor"
+public  = true
 type    = "bool"
 default = true
 label   = "Correcteur orthographique actif"
+description = "Active la vérification orthographique du navigateur dans l'éditeur de notes."
 
 [[settings]]
 key     = "enable_bidirectional_links"
 scope   = "global"
+group   = "editor"
 type    = "bool"
 default = true
 label   = "Liens bidirectionnels actifs"
+description = "Résout les liens [[entre notes]] et alimente le graphe et les rétroliens. Désactivés, ils ne sont plus créés ni affichés."
+
+# ── Partage par lien ──────────────────────────────────────────────────────────
+# Une note se partage par un lien à jeton, lisible sans compte. L'instance décide
+# si ce canal existe et jusqu'où un lien peut vivre.
+
+[[setting_groups]]
+id          = "sharing"
+label       = "Partage"
+icon        = "Share2"
+position    = 2
+description  = "Les liens de partage publics : autorisation, durée de vie maximale."
 
 [[settings]]
-key     = "default_reminder_before_min"
+key     = "allow_public_sharing"
 scope   = "global"
+group   = "sharing"
+type    = "bool"
+default = true
+label   = "Partage par lien autorisé"
+description = "Autorise les utilisateurs à publier une note derrière un lien lisible sans compte. Désactivé, aucun lien ne peut plus être créé et les liens déjà émis cessent de répondre."
+
+[[settings]]
+key     = "share_link_max_days"
+scope   = "global"
+group   = "sharing"
 type    = "int"
-default = 60
-label   = "Rappel par défaut avant échéance (min)"
+default = 0
+min     = 0
+max     = 3650
+unit    = "jours"
+depends_on  = "allow_public_sharing"
+label   = "Durée de vie maximale d'un lien (jours)"
+description = "Plafonne l'expiration d'un lien de partage. Un lien demandé sans expiration, ou pour une durée supérieure, est ramené à ce plafond. 0 : aucun plafond."
+
+# ── Limites et conservation ───────────────────────────────────────────────────
+
+[[setting_groups]]
+id          = "retention"
+label       = "Limites et conservation"
+icon        = "Trash2"
+position    = 3
+description  = "La taille maximale d'une note et la durée de rétention de la corbeille."
+
+[[settings]]
+key     = "max_note_size"
+scope   = "global"
+group   = "retention"
+type    = "int"
+default = 1048576
+min     = 1024
+max     = 104857600
+unit    = "octets"
+label   = "Taille maximale d'une note (octets)"
+description = "Refuse l'enregistrement d'une note dont le corps dépasse cette taille."
+
+[[settings]]
+key     = "trash_retention_days"
+scope   = "global"
+group   = "retention"
+type    = "int"
+default = 0
+min     = 0
+max     = 3650
+unit    = "jours"
+risk    = "warning"
+label   = "Rétention de la corbeille (jours)"
+description = "Les notes mises à la corbeille depuis plus longtemps sont supprimées définitivement, avec leur fichier de contenu. 0 (défaut) : jamais de purge automatique — une purge doit être choisie, jamais héritée d'une mise à jour."

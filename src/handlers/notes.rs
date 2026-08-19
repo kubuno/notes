@@ -31,7 +31,9 @@ pub async fn create(
     Extension(user): Extension<NotesUser>,
     Json(dto): Json<CreateNoteDto>,
 ) -> Result<(StatusCode, Json<Value>)> {
-    let max = state.settings.notes.max_content_size as usize;
+    // Instance ceiling from the admin console; falls back to the compiled
+    // default when the core has never been reached.
+    let max = state.instance().max_note_size as usize;
     if dto.content.as_deref().map(|c| c.len()).unwrap_or(0) > max {
         return Err(NotesError::ContentTooLarge);
     }
@@ -41,8 +43,9 @@ pub async fn create(
         .await
         .map_err(NotesError::Internal)?;
 
-    // Mettre à jour les backlinks en arrière-plan
-    {
+    // Mettre à jour les backlinks en arrière-plan — seulement si les liens
+    // bidirectionnels sont activés à l'échelle de l'instance.
+    if state.instance().enable_bidirectional_links {
         let db2     = state.db.clone();
         let note_id = note.id;
         let uid     = user.id;
@@ -118,7 +121,9 @@ pub async fn update(
     Path(id): Path<Uuid>,
     Json(dto): Json<UpdateNoteDto>,
 ) -> Result<Json<Value>> {
-    let max = state.settings.notes.max_content_size as usize;
+    // Instance ceiling from the admin console; falls back to the compiled
+    // default when the core has never been reached.
+    let max = state.instance().max_note_size as usize;
     if dto.content.as_deref().map(|c| c.len()).unwrap_or(0) > max {
         return Err(NotesError::ContentTooLarge);
     }
@@ -138,11 +143,13 @@ pub async fn update(
     }
 
     if let Some(content) = content_clone {
-        let db2 = state.db.clone();
-        let uid = user.id;
-        tokio::spawn(async move {
-            let _ = backlink_service::update_backlinks(id, uid, &content, &db2).await;
-        });
+        if state.instance().enable_bidirectional_links {
+            let db2 = state.db.clone();
+            let uid = user.id;
+            tokio::spawn(async move {
+                let _ = backlink_service::update_backlinks(id, uid, &content, &db2).await;
+            });
+        }
     }
 
     Ok(Json(json!({ "note": note })))
@@ -211,6 +218,11 @@ pub async fn backlinks(
     Extension(user): Extension<NotesUser>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>> {
+    // Bidirectional links disabled instance-wide: no backlinks to show.
+    if !state.instance().enable_bidirectional_links {
+        return Ok(Json(json!({ "backlinks": [] })));
+    }
+
     // Vérifier que la note appartient à l'utilisateur
     note_service::get_note(&state, id, user.id)
         .await

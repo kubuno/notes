@@ -24,6 +24,23 @@ struct Manifest {
     /// Declarative settings manifest pushed to the core at registration.
     #[serde(default)]
     settings:      Vec<SettingDefRaw>,
+    /// Pages the admin panel is split into (`[[setting_groups]]`).
+    #[serde(default)]
+    setting_groups: Vec<SettingGroupRaw>,
+}
+
+/// One `[[setting_groups]]` entry of module.toml, forwarded verbatim. `id` is a
+/// STABLE, UNTRANSLATED slug: it travels in the URL of the admin page.
+#[derive(Deserialize, Serialize)]
+struct SettingGroupRaw {
+    id:          String,
+    label:       String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    icon:        Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    position:    Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
 }
 
 /// One `[[settings]]` entry from module.toml. Serialized verbatim into the
@@ -43,8 +60,36 @@ struct SettingDefRaw {
     description: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     category:    Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    group:       Option<String>,
     #[serde(default)]
     public:      bool,
+    // ── Presentation metadata ───────────────────────────────────────────────
+    // The panel is schema-driven: these travel to the core untouched and are
+    // what let it render a setting with its bounds, its unit and its warning
+    // without a line of module-specific front-end code.
+    /// Fold behind the section's "advanced" disclosure.
+    #[serde(default)]
+    advanced:    bool,
+    /// "info" | "warning" | "danger" — how loudly to warn before changing it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    risk:        Option<String>,
+    /// Bounds for `type = "int"`, enforced by the core as well as the panel.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    min:         Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    max:         Option<i64>,
+    /// Suffix shown beside the field ("Mo", "s", "min").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    unit:        Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    placeholder: Option<String>,
+    /// The string value is a list, one entry per line — render a textarea.
+    #[serde(default)]
+    multiline:   bool,
+    /// Key of a boolean setting of the same module; hidden while it is off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    depends_on:  Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -171,12 +216,40 @@ async fn main() -> Result<()> {
         settings.core.internal_secret.clone(),
     ));
 
+    // Instance settings: compiled defaults, then one read from the core.
+    let instance = Arc::new(std::sync::RwLock::new(
+        kubuno_notes::config::instance::InstanceConfig::default(),
+    ));
+    if let Some(cfg) = kubuno_notes::config::instance::fetch(
+        &http, &settings.core.url, &settings.core.internal_secret,
+    ).await {
+        if let Ok(mut w) = instance.write() { *w = cfg; }
+    }
+
     let state = AppState {
         db:           pool.clone(),
         settings:     Arc::new(settings.clone()),
         http:         http.clone(),
         files_client,
+        instance:     instance.clone(),
     };
+
+    // Instance-settings refresher: an admin edit takes effect within a minute.
+    {
+        let http_r     = http.clone();
+        let settings_r = settings.clone();
+        let instance_r = instance.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                if let Some(cfg) = kubuno_notes::config::instance::fetch(
+                    &http_r, &settings_r.core.url, &settings_r.core.internal_secret,
+                ).await {
+                    if let Ok(mut w) = instance_r.write() { *w = cfg; }
+                }
+            }
+        });
+    }
 
     // Storage usage reporter: declares to the core what notes holds per account.
     // Started before registration on purpose — its first attempt routinely fails
@@ -214,6 +287,14 @@ async fn main() -> Result<()> {
                     Err(e) => tracing::warn!(error = %e, "Heartbeat erreur réseau"),
                 }
             }
+        });
+    }
+
+    // Trash cleaner: purges notes trashed longer ago than the instance allows.
+    {
+        let trash_state = state.clone();
+        tokio::spawn(async move {
+            kubuno_notes::workers::trash_worker::start(trash_state).await;
         });
     }
 
@@ -279,6 +360,9 @@ async fn register_with_core(http: &Client, settings: &Settings) {
     let settings_schema: Value = manifest.as_ref()
         .map(|m| serde_json::to_value(&m.settings).unwrap_or_else(|_| json!([])))
         .unwrap_or_else(|| json!([]));
+    let setting_groups: Value = manifest.as_ref()
+        .map(|m| serde_json::to_value(&m.setting_groups).unwrap_or_else(|_| json!([])))
+        .unwrap_or_else(|| json!([]));
 
     let payload = json!({
         "module_id":         "notes",
@@ -286,6 +370,7 @@ async fn register_with_core(http: &Client, settings: &Settings) {
         "description":       description,
         "settings_path":     settings_path,
         "settings_schema":   settings_schema,
+        "setting_groups":    setting_groups,
         "base_url":          base_url,
         "version":           env!("CARGO_PKG_VERSION"),
         "routes":            [{ "method": "*", "path": "/*" }],

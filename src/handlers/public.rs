@@ -28,6 +28,14 @@ pub async fn get_shared_note(
     State(state): State<AppState>,
     Path(token): Path<String>,
 ) -> Result<Json<Value>> {
+    // Turning link sharing off must also close the links already handed out,
+    // otherwise the policy only applies to people who have not shared yet. The
+    // answer is the same 404 an unknown token gets: a closed instance must not
+    // reveal that the token was valid.
+    if !state.instance().allow_public_sharing {
+        return Err(NotesError::NotFound("Partage introuvable".into()));
+    }
+
     // Récupérer le partage
     let share = sqlx::query_as::<_, ShareRow>(
         "SELECT id, note_id, expires_at FROM shares WHERE token = $1 AND is_active = TRUE",

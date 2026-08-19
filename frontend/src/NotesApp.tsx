@@ -15,6 +15,7 @@ import {
   Pencil, MoreVertical, Clock, X, Tag,
 } from 'lucide-react'
 import { useNotesStore } from './store'
+import { useNotesInstance } from './useNotesInstance'
 import { Note, Label, NOTE_COLORS, NoteColor } from './api'
 import { format } from 'date-fns'
 import { getDateLocale } from '@kubuno/sdk'
@@ -195,10 +196,10 @@ function SelectionBar({
         )}
       </div>
 
-      {/* Trash */}
+      {/* Trash — also bound to the Delete key (see the main app) */}
       <IconBtn
         icon={<Trash size={16} />}
-        title={t('tip_delete')}
+        title={`${t('tip_delete')} (Suppr)`}
         onClick={onBulkTrash}
       />
     </div>
@@ -463,13 +464,21 @@ function NoteEditor({ note, onClose, onUpdate, onArchive }: NoteEditorProps) {
   const titleRef   = useRef(title);   titleRef.current = title
   const contentRef = useRef(content); contentRef.current = content
 
+  // Autosave cadence from the instance settings (seconds → ms); 0 disables it.
+  // Refreshed each render so the memoised scheduler reads the current value.
+  const notesInstance = useNotesInstance()
+  const autosaveMsRef = useRef(30000)
+  autosaveMsRef.current = notesInstance.autosaveIntervalS > 0 ? notesInstance.autosaveIntervalS * 1000 : 0
+
   const scheduleSave = useCallback((t: string, c: string) => {
     pendingRef.current = true
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => {
-      pendingRef.current = false
-      onUpdate(note.id, { title: t || null, content: c })
-    }, 800)
+    if (autosaveMsRef.current > 0) {
+      saveTimer.current = setTimeout(() => {
+        pendingRef.current = false
+        onUpdate(note.id, { title: t || null, content: c })
+      }, autosaveMsRef.current)
+    }
   }, [note.id, onUpdate])
 
   // Vide la sauvegarde différée (avant fermeture/navigation/démontage) pour ne
@@ -537,6 +546,7 @@ function NoteEditor({ note, onClose, onUpdate, onArchive }: NoteEditorProps) {
             ${isDark ? 'text-white/90' : 'text-text-primary'}`}
           placeholder={t('ph_create')}
           rows={8}
+          spellCheck={notesInstance.spellCheck}
           value={content}
           onChange={e => { setContent(e.target.value); scheduleSave(title, e.target.value) }}
           onPaste={e => {
@@ -567,6 +577,7 @@ function NoteEditor({ note, onClose, onUpdate, onArchive }: NoteEditorProps) {
 // ── QuickNoteBar ──────────────────────────────────────────────────────────────
 function QuickNoteBar({ onCreate }: { onCreate: (data: { title?: string; content?: string; is_pinned?: boolean }) => void }) {
   const { t } = useTranslation('notes')
+  const notesInstance = useNotesInstance()
   const [open,    setOpen]    = useState(false)
   const [title,   setTitle]   = useState('')
   const [content, setContent] = useState('')
@@ -635,6 +646,7 @@ function QuickNoteBar({ onCreate }: { onCreate: (data: { title?: string; content
             className="w-full px-4 py-2 text-sm text-text-primary bg-transparent outline-none resize-none placeholder:text-text-tertiary"
             placeholder={t('ph_create')}
             rows={3}
+            spellCheck={notesInstance.spellCheck}
             value={content}
             onChange={e => setContent(e.target.value)}
             onPaste={e => {
@@ -697,13 +709,6 @@ export default function NotesApp() {
     })
   }, [notes])
 
-  // ESC clears selection
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') clearSelection() }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [])
-
   // ── Selection ─────────────────────────────────────────────────────────────
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => {
@@ -744,6 +749,23 @@ export default function NotesApp() {
     await Promise.all([...selectedIds].map(id => trashNote(id)))
     clearSelection()
   }
+
+  // Global keys: ESC clears the selection, Delete trashes it through the very
+  // same handler as the selection bar (confirmation dialog included). The note
+  // editor is a rich text field, so the key is left alone while it is open.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { clearSelection(); return }
+      if (e.key !== 'Delete') return
+      const el = e.target as HTMLElement | null
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return
+      if (activeNote || selectedIds.size === 0) return
+      e.preventDefault()
+      handleBulkTrash()
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [activeNote, selectedIds]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleBulkLabel = async (labelId: string) => {
     const { notesApi } = await import('./api')

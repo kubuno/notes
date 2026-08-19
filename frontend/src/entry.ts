@@ -7,6 +7,7 @@
 import { lazy } from 'react'
 import {
   RouteRegistry,
+  ExtensionRegistry,
   ModuleSettingsRegistry,
   WidgetRegistry,
   WaffleAppRegistry,
@@ -18,12 +19,11 @@ import {
   useRightPanelStore,
   SDK_VERSION,
 } from '@kubuno/sdk'
-import { FileText } from 'lucide-react'
 import './index.css'
 import './i18n'
 import { useNotesStore } from './store'
 import NotesLogo from './NotesLogo'
-import NotesNewActions from './NotesNewActions'
+import { newActionItems } from './NotesNewActions'
 import NotesSidebarBody from './NotesSidebarBody'
 import NotesToolbar from './NotesToolbar'
 import NotesMiniPanel from './NotesMiniPanel'
@@ -55,9 +55,14 @@ export function register() {
   useSidebarStore.getState().register({
     moduleId:    'notes',
     routePrefix: '/notes',
-    NewActions:  NotesNewActions,
     SidebarBody: NotesSidebarBody,
     collapsedBody: true,
+  })
+
+  // Sidebar "New" button: contribute MenuItem[] (data) to the shell menu.
+  ExtensionRegistry.register('shell.new-actions', 'notes', {
+    moduleId: 'notes',
+    items: newActionItems,
   })
 
   useToolbarStore.getState().register({
