@@ -1,5 +1,8 @@
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BookOpen, Tag, Pin, Archive } from 'lucide-react'
+import { Input } from '@ui'
+import { useSearchStore } from '@kubuno/sdk'
 import { useNotesStore } from './store'
 import { NOTE_COLORS } from './api'
 
@@ -9,8 +12,32 @@ export default function NotesFilterPanel({ onClose }: { onClose: () => void }) {
     notebooks, labels,
     activeNotebook, activeLabel,
     view,
-    setActiveNotebook, setActiveLabel, setView,
+    setActiveNotebook, setActiveLabel, setView, setSearchQuery,
   } = useNotesStore()
+
+  // ── Two-way sync with the shell search bar (platform rule) ──────────────────
+  // Notes' search has no text operators: the bar's query is plain free text
+  // (backend `q`). The « Contains the words » field below mirrors it: opening
+  // the panel pre-fills it with the current query, and editing it rewrites the
+  // bar's text live (running the search like typing does). The view/notebook/
+  // label entries are state filters with no query-text representation — they
+  // deliberately stay panel-only (no invented operators).
+  const query    = useSearchStore(s => s.query)
+  const setQuery = useSearchStore(s => s.setQuery)
+  const [words, setWords] = useState(query)
+  // Remembers the last query WE pushed so its echo doesn't clobber the field.
+  const lastBuilt = useRef<string | null>(null)
+  useEffect(() => {
+    if (query === lastBuilt.current) return
+    setWords(query)
+  }, [query])
+
+  const setContainsWords = (v: string) => {
+    setWords(v)
+    lastBuilt.current = v
+    setQuery(v)          // rewrite the bar's text live
+    setSearchQuery(v)    // run the live search, like typing in the bar does
+  }
 
   const Section = ({ title }: { title: string }) => (
     <p className="text-[10px] font-bold text-text-tertiary uppercase tracking-wider px-4 pt-3 pb-1.5">
@@ -36,6 +63,18 @@ export default function NotesFilterPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="py-2" style={{ minWidth: 240 }}>
+      {/* Contains the words — mirrors the shell search bar (two-way sync) */}
+      <Section title={t('notes_filter_words')} />
+      <div className="px-4 pb-1.5">
+        <Input
+          type="text"
+          placeholder={t('notes_search_ph')}
+          value={words}
+          onChange={e => setContainsWords(e.target.value)}
+        />
+      </div>
+      <div className="mx-4 my-2 h-px bg-border" />
+
       {/* Vue rapide */}
       <Section title={t('notes_filter_show')} />
       <FilterBtn active={view === 'all' && !activeNotebook && !activeLabel} onClick={() => { setView('all'); setActiveNotebook(null); setActiveLabel(null); onClose() }}>
@@ -79,7 +118,7 @@ export default function NotesFilterPanel({ onClose }: { onClose: () => void }) {
               <button
                 key={label.id}
                 onClick={() => { setActiveLabel(label.id); onClose() }}
-                className={`text-xs px-3 py-1 rounded-full border transition-colors
+                className={`text-xs px-3 py-1 rounded-md border transition-colors
                   ${activeLabel === label.id
                     ? 'bg-primary text-white border-primary'
                     : 'border-border text-text-secondary hover:border-primary hover:text-primary'}`}

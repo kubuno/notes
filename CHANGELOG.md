@@ -9,6 +9,15 @@ number at release time, and CI publishes that section as the GitHub Release note
 
 ## [Unreleased]
 
+### Added
+
+- **A "Contains the words" field in the search filter panel, synced with the
+  search bar both ways.** Opening the panel pre-fills the field with the bar's
+  current text, and editing it rewrites the bar's text live (running the
+  search as you type, exactly like typing in the bar). Notes' search is plain
+  free text — the view/notebook/label entries are state filters with no text
+  representation, so they intentionally stay panel-only.
+
 ## [0.1.6] - 2026-08-19
 
 ### Changed
