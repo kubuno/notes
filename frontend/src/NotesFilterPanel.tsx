@@ -1,8 +1,8 @@
+import { useSearchStore } from '@kubuno/sdk'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BookOpen, Tag, Pin, Archive } from 'lucide-react'
 import { Input } from '@ui'
-import { useSearchStore } from '@kubuno/sdk'
 import { useNotesStore } from './store'
 import { NOTE_COLORS } from './api'
 

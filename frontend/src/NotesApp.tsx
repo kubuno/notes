@@ -1,12 +1,11 @@
+import { useConfirm, useDraggable, formatDate } from '@kubuno/sdk'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useConfirm } from '@kubuno/sdk'
 import { ConfirmDialog } from '@ui'
 import { FloatCheckbox } from '@ui'
 import { MenuDropdown, type MenuDropdownPos } from '@ui'
 import DOMPurify from 'dompurify'
-import { useDraggable } from '@kubuno/sdk'
 import { readKubunoData, kubunoDataToMarkdown } from './kubunoData'
 import {
   Pin, Archive, BookOpen,
@@ -17,8 +16,6 @@ import {
 import { useNotesStore } from './store'
 import { useNotesInstance } from './useNotesInstance'
 import { Note, Label, NOTE_COLORS, NoteColor } from './api'
-import { format } from 'date-fns'
-import { getDateLocale } from '@kubuno/sdk'
 
 // ── CheckSquare icon ──────────────────────────────────────────────────────────
 function CheckSquareIcon({ className = 'w-4 h-4' }: { className?: string }) {
@@ -348,7 +345,7 @@ function NoteCard({
       </div>
 
       <div className={`px-4 pb-2 text-[10px] ${isDark ? 'text-white/40' : 'text-text-tertiary'}`}>
-        {format(new Date(note.updated_at), 'd MMM', { locale: getDateLocale(i18n.language) })}
+        {formatDate(new Date(note.updated_at), 'date')}
       </div>
     </div>
   )
@@ -419,7 +416,7 @@ function NoteEditorToolbar({
       </div>
       <button
         onClick={onClose}
-        className={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ml-2
+        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ml-2
           ${dark ? 'text-white/80 hover:bg-black/15' : `${btnClass} hover:bg-surface-2`}`}
       >
         {t('common_close')}

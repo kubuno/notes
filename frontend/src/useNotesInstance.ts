@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
 import { api } from '@kubuno/sdk'
+import { useQuery } from '@tanstack/react-query'
 
 // Editor-side instance defaults, as the administrator left them in the console.
 // These act inside the running editor (autosave cadence, spell check), so they

@@ -1,3 +1,4 @@
+import { RouteRegistry, ExtensionRegistry, ModuleSettingsRegistry, WidgetRegistry, WaffleAppRegistry, FileTypeRegistry, FaviconRegistry, useSidebarStore, useToolbarStore, useSearchStore, useRightPanelStore, SDK_VERSION } from '@kubuno/sdk'
 /**
  * Point d'entrée du bundle MODULE notes, chargé à l'exécution. Buildé séparément
  * via `vite.module.config.ts` ; specifiers partagés résolus au runtime par
@@ -5,20 +6,6 @@
  * `sdkVersion` permet de rejeter une incompatibilité de contrat.
  */
 import { lazy } from 'react'
-import {
-  RouteRegistry,
-  ExtensionRegistry,
-  ModuleSettingsRegistry,
-  WidgetRegistry,
-  WaffleAppRegistry,
-  FileTypeRegistry,
-  FaviconRegistry,
-  useSidebarStore,
-  useToolbarStore,
-  useSearchStore,
-  useRightPanelStore,
-  SDK_VERSION,
-} from '@kubuno/sdk'
 import './index.css'
 import './i18n'
 import { useNotesStore } from './store'
@@ -33,7 +20,7 @@ import NotesRecentWidget from './NotesRecentWidget'
 export const sdkVersion = SDK_VERSION
 
 export function register() {
-  FaviconRegistry.register('notes', '/notes-logo.svg')
+  FaviconRegistry.register('notes', '/notes-logo.png')
 
   WaffleAppRegistry.register('notes', 'Notes', [
     { id: 'notes', label: 'Notes', Icon: NotesLogo, path: '/notes' },

@@ -1,10 +1,9 @@
+import { formatRelative, toDate } from '@kubuno/sdk'
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Plus, FileText, CheckSquare, Pin } from 'lucide-react'
 import { Button } from '@ui'
-import { formatDistanceToNow, parseISO } from 'date-fns'
-import { getDateLocale } from '@kubuno/sdk'
 import { useNotesStore } from './store'
 import type { Note } from './api'
 
@@ -61,7 +60,7 @@ function NoteCard({ note, onClick }: { note: Note; onClick: () => void }) {
           ) : null}
 
           <span className="text-[10px] text-text-tertiary mt-1 block">
-            {formatDistanceToNow(parseISO(note.updated_at), { addSuffix: true, locale: getDateLocale(i18n.language) })}
+            {formatRelative(toDate(note.updated_at))}
           </span>
         </div>
       </div>

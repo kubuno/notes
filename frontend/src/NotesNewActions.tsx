@@ -1,5 +1,5 @@
-import type { MenuItem } from '@ui'
 import { i18n, navigate } from '@kubuno/sdk'
+import type { MenuItem } from '@ui'
 import { FileText, CheckSquare } from 'lucide-react'
 import { useNotesStore } from './store'
 

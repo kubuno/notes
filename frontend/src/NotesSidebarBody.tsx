@@ -1,3 +1,4 @@
+import { SidebarNavItem } from '@kubuno/sdk'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link as RouterLink, useLocation } from 'react-router-dom'
@@ -5,7 +6,6 @@ import {
   BookOpen, Pin, Archive, Trash2, Tag, ChevronDown,
 } from 'lucide-react'
 import { useNotesStore } from './store'
-import { SidebarNavItem } from '@kubuno/sdk'
 import { hashTo, fromHash } from './hashRoute'
 
 // Plain views reachable through a sidebar hash link (no id attached).

@@ -1,10 +1,8 @@
+import { DashboardWidget, formatRelative, toDate } from '@kubuno/sdk'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { StickyNote } from 'lucide-react'
-import { formatDistanceToNow, parseISO } from 'date-fns'
-import { getDateLocale } from '@kubuno/sdk'
 import { notesApi } from './api'
-import { DashboardWidget } from '@kubuno/sdk'
 
 export default function NotesRecentWidget() {
   const { t, i18n } = useTranslation('notes')
@@ -41,7 +39,7 @@ export default function NotesRecentWidget() {
                 </p>
               )}
               <p className="text-xs text-text-tertiary mt-1">
-                {formatDistanceToNow(parseISO(note.updated_at), { locale: getDateLocale(i18n.language), addSuffix: true })}
+                {formatRelative(toDate(note.updated_at))}
               </p>
             </li>
           ))}

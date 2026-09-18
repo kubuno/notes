@@ -1,3 +1,4 @@
+import { ModuleServiceRegistry } from '@kubuno/sdk'
 /**
  * Cross-module data sharing (JSON envelopes over the clipboard) — thin typed
  * facade over the platform service published by the core at runtime
@@ -5,7 +6,6 @@
  * `@kubuno/sdk >= 0.1.3` is published on npm, these can become direct SDK
  * imports; until then only the TYPES are declared locally.
  */
-import { ModuleServiceRegistry } from '@kubuno/sdk'
 import type React from 'react'
 
 export interface KubunoDataEnvelope {
