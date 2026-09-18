@@ -1377,7 +1377,7 @@ dependencies = [
 
 [[package]]
 name = "kubuno-notes"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "anyhow",
  "argon2",
