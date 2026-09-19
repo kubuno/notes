@@ -9,6 +9,16 @@ number at release time, and CI publishes that section as the GitHub Release note
 
 ## [Unreleased]
 
+### Fixed
+
+- **A note reminder is no longer delivered several times over.** When more than
+  one copy of the module was running — during a restart, or on an instance that
+  keeps a spare — every one of them fired every due reminder, so the same alert
+  arrived two, three or four times. Each reminder is now claimed by exactly one
+  of them before it is sent. A recurring reminder is also moved to its next
+  occurrence in the same step, so an interrupted run can no longer leave it
+  firing on every cycle.
+
 ### Security
 
 - **Database driver updated past an unfixable advisory.** The previous line
