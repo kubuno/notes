@@ -37,7 +37,9 @@ async fn union_rows(
     cursor: i64,
     limit: i64,
 ) -> Result<Vec<(Uuid, i64, String)>> {
-    let rows: Vec<(Uuid, i64, String)> = sqlx::query_as(&format!(
+    // Audited: `live` and `tomb` are table names supplied by this module's own
+    // call sites as literals — never by a request — and every value is bound.
+    let rows: Vec<(Uuid, i64, String)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         r#"SELECT id, change_seq, 'live'::text AS src FROM {live}
                WHERE owner_id = $1 AND change_seq > $2
            UNION ALL
@@ -45,7 +47,7 @@ async fn union_rows(
                WHERE owner_id = $1 AND change_seq > $2
            ORDER BY change_seq
            LIMIT $3"#
-    ))
+    )))
     .bind(user)
     .bind(cursor)
     .bind(limit)
