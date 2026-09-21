@@ -35,7 +35,8 @@ pub async fn create(
     let label = label_service::create_label(&state.db, user.id, dto)
         .await
         .map_err(|e| {
-            if e.to_string().contains("unique") {
+            let m = e.to_string().to_lowercase();
+            if m.contains("unique") || m.contains("duplicate") {
                 NotesError::Conflict("Un label avec ce nom existe déjà".into())
             } else {
                 NotesError::Internal(e)

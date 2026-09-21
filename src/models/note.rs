@@ -22,7 +22,12 @@ pub struct Note {
     pub drawing_path: Option<String>,
     pub audio_path:   Option<String>,
     pub transcript:   Option<String>,
+    // Backlink arrays live in a JSON-array column (portable across the three
+    // engines; `UUID[]` exists only on PostgreSQL). `#[sqlx(json)]` decodes them
+    // through `sqlx::types::Json`; Serialize still emits a plain array.
+    #[sqlx(json)]
     pub mentions:     Vec<Uuid>,
+    #[sqlx(json)]
     pub mentioned_by: Vec<Uuid>,
     pub is_pinned:    bool,
     pub is_archived:  bool,

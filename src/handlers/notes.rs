@@ -3,6 +3,7 @@ use axum::{
     http::StatusCode,
     Extension, Json,
 };
+use kubuno_db::{params, DbValue, JsonVec};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -13,6 +14,7 @@ use crate::{
     models::{CreateNoteDto, ListNotesQuery, UpdateNoteDto},
     services::{backlink_service, note_service},
     state::AppState,
+    sync,
 };
 
 pub async fn list(
@@ -82,8 +84,15 @@ pub async fn get(
         if let Some(fname) = crate::services::content_files::file_name(&state, user.id, fid).await {
             let stem = crate::services::content_files::strip_ext(&fname);
             if !stem.is_empty() && note.title.as_deref() != Some(stem.as_str()) {
-                sqlx::query("UPDATE notes SET title = $2 WHERE id = $1")
-                    .bind(id).bind(&stem).execute(&state.db).await?;
+                // A title change is a note change → fresh change_seq in the same tx.
+                let mut tx = state.db.begin().await?;
+                let seq = sync::next_note_seq(&mut tx).await?;
+                tx.execute(
+                    "UPDATE notes.notes SET title = $1, change_seq = $2 WHERE id = $3",
+                    params![&stem, seq, id],
+                )
+                .await?;
+                tx.commit().await?;
                 note.title = Some(stem);
             }
         }
@@ -101,11 +110,11 @@ pub async fn open_by_file(
     Extension(user): Extension<NotesUser>,
     Json(dto): Json<OpenByFileDto>,
 ) -> Result<Json<Value>> {
-    let id = sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM notes WHERE file_id = $1 AND owner_id = $2 AND is_trashed = FALSE",
+    let id = state.db.fetch_optional_scalar::<Uuid>(
+        "SELECT id FROM notes.notes WHERE file_id = $1 AND owner_id = $2 AND is_trashed = $3",
+        params![dto.file_id, user.id, false],
     )
-    .bind(dto.file_id).bind(user.id)
-    .fetch_optional(&state.db).await?
+    .await?
     .ok_or_else(|| NotesError::NotFound(format!("Aucune note liée au fichier {}", dto.file_id)))?;
 
     let note = note_service::get_note(&state, id, user.id)
@@ -229,28 +238,48 @@ pub async fn backlinks(
         .map_err(NotesError::Internal)?
         .ok_or_else(|| NotesError::NotFound(format!("Note {id}")))?;
 
-    let mentioned_by: Vec<Uuid> = sqlx::query_scalar::<_, Uuid>(
-        "SELECT unnest(mentioned_by) FROM notes WHERE id = $1",
-    )
-    .bind(id)
-    .fetch_all(&state.db)
-    .await
-    .map_err(NotesError::Database)?;
+    // The `mentioned_by` backlink array lives in a JSON-array column; read it as
+    // a Vec<Uuid> and fetch those notes with a portable `id IN (...)`.
+    let mentioned_by: Vec<Uuid> = state
+        .db
+        .fetch_optional_as::<MentionedByRow>(
+            "SELECT mentioned_by FROM notes.notes WHERE id = $1",
+            params![id],
+        )
+        .await
+        .map_err(NotesError::Database)?
+        .map(|r| r.mentioned_by.into_inner())
+        .unwrap_or_default();
 
     let mut backlink_notes = if mentioned_by.is_empty() {
         vec![]
     } else {
-        sqlx::query_as::<_, crate::models::Note>(
-            "SELECT * FROM notes WHERE id = ANY($1) AND owner_id = $2 AND is_trashed = FALSE",
-        )
-        .bind(&mentioned_by)
-        .bind(user.id)
-        .fetch_all(&state.db)
-        .await
-        .map_err(NotesError::Database)?
+        // owner_id = $1, is_trashed = $2, then the id list from $3.
+        let list = state.db.backend().in_list(3, mentioned_by.len());
+        let sql = format!(
+            "SELECT * FROM notes.notes \
+             WHERE owner_id = $1 AND is_trashed = $2 AND id IN ({list})"
+        );
+        let mut binds: Vec<DbValue> = params![user.id, false];
+        for m in &mentioned_by {
+            binds.push((*m).into());
+        }
+        state
+            .db
+            .fetch_all_as::<crate::models::Note>(&sql, binds)
+            .await
+            .map_err(NotesError::Database)?
     };
     // Aperçu pour l'affichage (contenu complet dans le fichier .kbnot).
     for n in &mut backlink_notes { n.content = n.preview.clone(); }
 
     Ok(Json(json!({ "backlinks": backlink_notes })))
+}
+
+/// The `mentioned_by` JSON-array column, read to resolve a note's backlinks.
+/// `JsonVec` decodes the array on all three engines (no `#[sqlx(json)]`: the
+/// wrapper carries its own Decode).
+#[derive(sqlx::FromRow)]
+struct MentionedByRow {
+    mentioned_by: JsonVec<Uuid>,
 }

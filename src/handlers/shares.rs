@@ -4,6 +4,7 @@ use axum::{
     Extension, Json,
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use kubuno_db::{new_id, params};
 use rand::RngCore;
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -45,14 +46,14 @@ pub async fn list(
     Extension(user): Extension<NotesUser>,
     Path(note_id): Path<Uuid>,
 ) -> Result<Json<Value>> {
-    let shares = sqlx::query_as::<_, NoteShare>(
-        "SELECT * FROM shares WHERE note_id = $1 AND created_by = $2 ORDER BY created_at DESC",
-    )
-    .bind(note_id)
-    .bind(user.id)
-    .fetch_all(&state.db)
-    .await
-    .map_err(NotesError::Database)?;
+    let shares = state
+        .db
+        .fetch_all_as::<NoteShare>(
+            "SELECT * FROM notes.shares WHERE note_id = $1 AND created_by = $2 ORDER BY created_at DESC",
+            params![note_id, user.id],
+        )
+        .await
+        .map_err(NotesError::Database)?;
 
     Ok(Json(json!({ "shares": shares })))
 }
@@ -70,16 +71,16 @@ pub async fn create(
     }
 
     // Vérifier ownership
-    let exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM notes WHERE id = $1 AND owner_id = $2)",
-    )
-    .bind(note_id)
-    .bind(user.id)
-    .fetch_one(&state.db)
-    .await
-    .map_err(NotesError::Database)?;
+    let exists = state
+        .db
+        .fetch_optional_scalar::<Uuid>(
+            "SELECT id FROM notes.notes WHERE id = $1 AND owner_id = $2",
+            params![note_id, user.id],
+        )
+        .await
+        .map_err(NotesError::Database)?;
 
-    if !exists {
+    if exists.is_none() {
         return Err(NotesError::NotFound(format!("Note {note_id}")));
     }
 
@@ -98,18 +99,25 @@ pub async fn create(
         (Some(d), _)                      => Some(days_from_now(d)),
     };
 
-    let share = sqlx::query_as::<_, NoteShare>(
-        r#"INSERT INTO shares (note_id, created_by, token, expires_at)
-           VALUES ($1, $2, $3, $4)
-           RETURNING *"#,
-    )
-    .bind(note_id)
-    .bind(user.id)
-    .bind(&token)
-    .bind(expires_at)
-    .fetch_one(&state.db)
-    .await
-    .map_err(NotesError::Database)?;
+    // Id generated in Rust (no gen_random_uuid / RETURNING on MySQL); the row is
+    // read back by id. Shares are not part of the delta sync.
+    let id = new_id();
+    let now = chrono::Utc::now();
+    state
+        .db
+        .execute(
+            "INSERT INTO notes.shares (id, note_id, created_by, token, expires_at, created_at) \
+             VALUES ($1, $2, $3, $4, $5, $6)",
+            params![id, note_id, user.id, &token, expires_at, now],
+        )
+        .await
+        .map_err(NotesError::Database)?;
+
+    let share = state
+        .db
+        .fetch_one_as::<NoteShare>("SELECT * FROM notes.shares WHERE id = $1", params![id])
+        .await
+        .map_err(NotesError::Database)?;
 
     Ok((StatusCode::CREATED, Json(json!({ "share": share }))))
 }
@@ -119,16 +127,14 @@ pub async fn delete(
     Extension(user): Extension<NotesUser>,
     Path((note_id, share_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode> {
-    let rows = sqlx::query(
-        "UPDATE shares SET is_active = FALSE WHERE id = $1 AND note_id = $2 AND created_by = $3",
-    )
-    .bind(share_id)
-    .bind(note_id)
-    .bind(user.id)
-    .execute(&state.db)
-    .await
-    .map_err(NotesError::Database)?
-    .rows_affected();
+    let rows = state
+        .db
+        .execute(
+            "UPDATE notes.shares SET is_active = $1 WHERE id = $2 AND note_id = $3 AND created_by = $4",
+            params![false, share_id, note_id, user.id],
+        )
+        .await
+        .map_err(NotesError::Database)?;
 
     if rows == 0 {
         return Err(NotesError::NotFound(format!("Share {share_id}")));

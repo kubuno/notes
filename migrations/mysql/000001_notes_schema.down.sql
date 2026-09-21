@@ -1,0 +1,10 @@
+DROP TABLE IF EXISTS label_tombstones;
+DROP TABLE IF EXISTS notebook_tombstones;
+DROP TABLE IF EXISTS note_tombstones;
+DROP TABLE IF EXISTS change_counter;
+DROP TABLE IF EXISTS shares;
+DROP TABLE IF EXISTS reminders;
+DROP TABLE IF EXISTS note_labels;
+DROP TABLE IF EXISTS labels;
+DROP TABLE IF EXISTS notes;
+DROP TABLE IF EXISTS notebooks;

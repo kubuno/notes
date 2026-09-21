@@ -24,8 +24,9 @@
 //!   journals the offline sync replays. Both are regenerable: the preview from
 //!   the drive file, the tombstones from the fact that the row is gone. Not
 //!   billed.
-//! * `index` — the `search_vector`. The module's own lookup structure, built at
-//!   write time from content it does not keep. Not billed.
+//! * `index` — the normalized search columns (`title_norm` / `body_norm` /
+//!   `transcript_norm`). The module's own lookup structure, built at write time
+//!   from content it does not keep. Not billed.
 //! * `delegated` — how many notes caused a drive file to exist. Weight is
 //!   deliberately zero and the core never adds this line to any total; it exists
 //!   so that "notes looks like it stores nothing" reads as *delegation* rather
@@ -33,11 +34,11 @@
 //!
 //! ## How bytes are measured
 //!
-//! `pg_column_size()` throughout, never `octet_length()`. These figures state
-//! what the module occupies **in the database**, and PostgreSQL stores this text
-//! and JSONB TOASTed and compressed: the logical length would over-state a long
-//! checklist by its whole compression ratio. `pg_column_size()` is the figure
-//! that matches what the instance actually holds.
+//! `pg_column_size()` on PostgreSQL, `LENGTH()` on MySQL/SQLite (see
+//! [`col_bytes`]). On PostgreSQL these figures state what the module occupies
+//! **in the database**, with this text and JSON stored TOASTed and compressed;
+//! the other two engines have no such introspection function, so the logical
+//! byte length stands in — an honest figure, just not the on-disk one.
 //!
 //! ## State, never deltas
 //!
@@ -49,11 +50,35 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
+use kubuno_db::dialect::Backend;
+use kubuno_db::{params, DbPool};
 use serde_json::json;
-use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::state::AppState;
+
+/// The byte length of one column, coalesced to 0 for NULL.
+///
+/// PostgreSQL's `pg_column_size` reports the on-disk (TOASTed, compressed) size;
+/// MySQL and SQLite have no equivalent introspection function, so the logical
+/// byte length (`LENGTH`) stands in — an honest figure, counting bytes on MySQL
+/// and characters on SQLite.
+fn col_bytes(backend: Backend, col: &str) -> String {
+    match backend {
+        Backend::Postgres => format!("COALESCE(pg_column_size({col}), 0)"),
+        Backend::MySql | Backend::Sqlite => format!("COALESCE(LENGTH({col}), 0)"),
+    }
+}
+
+/// `COALESCE(SUM(inner), 0)` decodable as `i64` on every engine.
+fn sum_bigint(backend: Backend, inner: &str) -> String {
+    let s = format!("COALESCE(SUM({inner}), 0)");
+    match backend {
+        Backend::Postgres => format!("({s})::bigint"),
+        Backend::MySql => format!("CAST({s} AS SIGNED)"),
+        Backend::Sqlite => format!("CAST({s} AS INTEGER)"),
+    }
+}
 
 /// How often the complete state is recounted and declared. Same period as the
 /// other modules, so a console refresh does not show one of them systematically
@@ -89,89 +114,106 @@ const CAT_INDEX: &str = "index";
 /// Objects notes made drive create. Never added to any total, by contract.
 const CAT_DELEGATED: &str = "delegated";
 
-/// Every byte-bearing query notes runs, paired with the category it feeds.
+/// Every byte-bearing query notes runs, paired with the category it feeds, built
+/// for the pool's engine (byte sizing and the COUNT cast are spelled per engine).
 ///
-/// Each statement must return exactly `(owner uuid, bytes bigint, objects bigint)`
-/// and must only read the `notes` schema. Keeping them in one table rather than
-/// scattered through functions is what lets the tests below assert, mechanically,
-/// that notes never declares a note's body.
-const OWNED_QUERIES: &[(&str, &str)] = &[
-    // The columns a note keeps for itself. `title` is deliberately included: it
-    // is typed by the person, it is not written into the `.kbnot` body, and
-    // leaving it out would mean the one part of a note visible in every list is
-    // the one part nobody accounts for.
-    (
-        CAT_CONTENT,
-        "SELECT owner_id,
-                COALESCE(SUM(
-                    COALESCE(pg_column_size(title), 0)
-                  + pg_column_size(checklist)
-                  + COALESCE(pg_column_size(transcript), 0)
-                ), 0)::bigint,
-                COUNT(*)::bigint
-           FROM notes.notes
-          GROUP BY owner_id",
-    ),
-    // Notebooks and labels: the shelves, not the books. Created by the account,
-    // deleted by the account, held by nobody else.
-    (
-        CAT_CONTENT,
-        "SELECT owner_id,
-                COALESCE(SUM(pg_column_size(name)), 0)::bigint,
-                COUNT(*)::bigint
-           FROM notes.notebooks
-          GROUP BY owner_id",
-    ),
-    (
-        CAT_CONTENT,
-        "SELECT owner_id,
-                COALESCE(SUM(pg_column_size(name)), 0)::bigint,
-                COUNT(*)::bigint
-           FROM notes.labels
-          GROUP BY owner_id",
-    ),
-    // The list preview: a truncation of the drive file, rebuilt on every write by
-    // `content_files::make_preview`. Cache by construction.
-    (
-        CAT_CACHE,
-        "SELECT owner_id,
-                COALESCE(SUM(pg_column_size(preview)), 0)::bigint,
-                COUNT(*)::bigint
-           FROM notes.notes
-          GROUP BY owner_id",
-    ),
-    // Tombstones exist so an offline client learns what disappeared while it was
-    // away. They describe deletions, they are pruned by the sync itself, and no
-    // account asked for them.
-    (
-        CAT_CACHE,
-        "SELECT owner_id, 0::bigint, COUNT(*)::bigint
-           FROM (
-                     SELECT owner_id FROM notes.note_tombstones
-           UNION ALL SELECT owner_id FROM notes.notebook_tombstones
-           UNION ALL SELECT owner_id FROM notes.label_tombstones
-           ) t
-          GROUP BY owner_id",
-    ),
-    (
-        CAT_INDEX,
-        "SELECT owner_id,
-                COALESCE(SUM(COALESCE(pg_column_size(search_vector), 0)), 0)::bigint,
-                COUNT(*)::bigint
-           FROM notes.notes
-          GROUP BY owner_id",
-    ),
-];
+/// Each statement returns exactly `(owner uuid, bytes bigint, objects bigint)`
+/// and only reads the `notes` schema. Keeping them in one place is what lets the
+/// tests below assert, mechanically, that notes never declares a note's body.
+fn owned_queries(backend: Backend) -> Vec<(&'static str, String)> {
+    let count = backend.count_bigint("*");
+    vec![
+        // The columns a note keeps for itself. `title` is deliberately included:
+        // it is typed by the person, it is not written into the `.kbnot` body,
+        // and leaving it out would mean the one part of a note visible in every
+        // list is the one part nobody accounts for.
+        (
+            CAT_CONTENT,
+            format!(
+                "SELECT owner_id, {bytes}, {count} FROM notes.notes GROUP BY owner_id",
+                bytes = sum_bigint(
+                    backend,
+                    &format!(
+                        "{} + {} + {}",
+                        col_bytes(backend, "title"),
+                        col_bytes(backend, "checklist"),
+                        col_bytes(backend, "transcript"),
+                    ),
+                ),
+            ),
+        ),
+        // Notebooks and labels: the shelves, not the books. Created by the
+        // account, deleted by the account, held by nobody else.
+        (
+            CAT_CONTENT,
+            format!(
+                "SELECT owner_id, {bytes}, {count} FROM notes.notebooks GROUP BY owner_id",
+                bytes = sum_bigint(backend, &col_bytes(backend, "name")),
+            ),
+        ),
+        (
+            CAT_CONTENT,
+            format!(
+                "SELECT owner_id, {bytes}, {count} FROM notes.labels GROUP BY owner_id",
+                bytes = sum_bigint(backend, &col_bytes(backend, "name")),
+            ),
+        ),
+        // The list preview: a truncation of the drive file, rebuilt on every
+        // write by `content_files::make_preview`. Cache by construction.
+        (
+            CAT_CACHE,
+            format!(
+                "SELECT owner_id, {bytes}, {count} FROM notes.notes GROUP BY owner_id",
+                bytes = sum_bigint(backend, &col_bytes(backend, "preview")),
+            ),
+        ),
+        // Tombstones exist so an offline client learns what disappeared while it
+        // was away. They describe deletions, they are pruned by the sync itself,
+        // and no account asked for them.
+        (
+            CAT_CACHE,
+            format!(
+                "SELECT owner_id, {zero}, {count} \
+                   FROM ( \
+                             SELECT owner_id FROM notes.note_tombstones \
+                   UNION ALL SELECT owner_id FROM notes.notebook_tombstones \
+                   UNION ALL SELECT owner_id FROM notes.label_tombstones \
+                   ) t \
+                  GROUP BY owner_id",
+                zero = backend.cast("0", kubuno_db::dialect::SqlType::BigInt),
+            ),
+        ),
+        // The normalized search columns: the module's own lookup structure, built
+        // at write time from content it does not keep.
+        (
+            CAT_INDEX,
+            format!(
+                "SELECT owner_id, {bytes}, {count} FROM notes.notes GROUP BY owner_id",
+                bytes = sum_bigint(
+                    backend,
+                    &format!(
+                        "{} + {} + {}",
+                        col_bytes(backend, "title_norm"),
+                        col_bytes(backend, "body_norm"),
+                        col_bytes(backend, "transcript_norm"),
+                    ),
+                ),
+            ),
+        ),
+    ]
+}
 
 /// Counts the drive files notes caused to exist, per owner.
 ///
 /// One row per note holding a non-null `file_id`. The weight is not measured
 /// here on purpose: drive holds those bytes and declares them as `content`, and
 /// any figure put in this line would be a guess the console might one day add up.
-const DELEGATED_QUERY: &str = "SELECT owner_id, COUNT(*)::bigint
-       FROM notes.notes
-      WHERE file_id IS NOT NULL
-      GROUP BY owner_id";
+fn delegated_query(backend: Backend) -> String {
+    format!(
+        "SELECT owner_id, {count} FROM notes.notes WHERE file_id IS NOT NULL GROUP BY owner_id",
+        count = backend.count_bigint("*"),
+    )
+}
 
 /// One `(account, category)` figure, as declared.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -190,31 +232,31 @@ struct Entry {
 /// failed here is *retired* by the core until the next sync repairs it — the
 /// honest outcome, since publishing a stale figure as current state would be
 /// worse than publishing none.
-async fn collect(db: &PgPool) -> Vec<Entry> {
+async fn collect(db: &DbPool) -> Vec<Entry> {
     // Several queries feed the same category (notes, notebooks and labels all
     // feed `content`), so figures are folded per `(user, category)` before being
     // sent: the core keys rows on that pair and would keep only the last one.
     let mut acc: HashMap<(Uuid, &'static str), (i64, i64)> = HashMap::new();
 
-    for (category, sql) in OWNED_QUERIES {
-        match sqlx::query_as::<_, (Uuid, i64, i64)>(*sql).fetch_all(db).await {
+    for (category, sql) in owned_queries(db.backend()) {
+        match db.fetch_all_as::<(Uuid, i64, i64)>(&sql, params![]).await {
             Ok(rows) => {
                 for (user_id, bytes, objects) in rows {
-                    let slot = acc.entry((user_id, *category)).or_insert((0, 0));
+                    let slot = acc.entry((user_id, category)).or_insert((0, 0));
                     slot.0 += bytes;
                     slot.1 += objects;
                 }
             }
             Err(e) => tracing::error!(
                 error = %e,
-                catégorie = *category,
+                catégorie = category,
                 "Recomptage de consommation échoué pour une requête — catégorie incomplète"
             ),
         }
     }
 
-    match sqlx::query_as::<_, (Uuid, i64)>(DELEGATED_QUERY)
-        .fetch_all(db)
+    match db
+        .fetch_all_as::<(Uuid, i64)>(&delegated_query(db.backend()), params![])
         .await
     {
         Ok(rows) => {
@@ -404,34 +446,37 @@ mod tests {
     /// body — would double-count exactly the quantity the core bills.
     #[test]
     fn the_body_is_never_weighed_here() {
-        for (category, sql) in OWNED_QUERIES {
+        for backend in [Backend::Postgres, Backend::MySql, Backend::Sqlite] {
+            for (category, sql) in owned_queries(backend) {
+                assert!(
+                    !sql.to_lowercase().contains("file_id"),
+                    "une requête pesée touche à file_id — le corps appartient à drive : {sql}"
+                );
+                assert_ne!(
+                    category, CAT_DELEGATED,
+                    "la délégation ne passe pas par owned_queries : elle ne porte aucun poids"
+                );
+            }
+            let delegated = delegated_query(backend).to_lowercase();
             assert!(
-                !sql.to_lowercase().contains("file_id"),
-                "une requête pesée touche à file_id — le corps appartient à drive : {sql}"
+                delegated.contains("count("),
+                "la ligne déléguée compte des objets, elle ne pèse rien"
             );
-            assert_ne!(
-                *category, CAT_DELEGATED,
-                "la délégation ne passe pas par OWNED_QUERIES : elle ne porte aucun poids"
-            );
-        }
-        assert!(
-            DELEGATED_QUERY.to_lowercase().contains("count(*)"),
-            "la ligne déléguée compte des objets, elle ne pèse rien"
-        );
-        for weighed in ["pg_column_size", "sum("] {
-            assert!(
-                !DELEGATED_QUERY.to_lowercase().contains(weighed),
-                "la ligne déléguée pèserait des octets que drive déclare déjà"
-            );
+            for weighed in ["pg_column_size", "length(", "sum("] {
+                assert!(
+                    !delegated.contains(weighed),
+                    "la ligne déléguée pèserait des octets que drive déclare déjà"
+                );
+            }
         }
     }
 
-    /// Only the four categories notes genuinely uses, and `content` never used
-    /// for something the account cannot delete.
+    /// Only the categories notes genuinely uses, and `content` never used for
+    /// something the account cannot delete.
     #[test]
     fn emitted_categories_are_the_expected_set() {
         use std::collections::BTreeSet;
-        let cats: BTreeSet<&str> = OWNED_QUERIES.iter().map(|(c, _)| *c).collect();
+        let cats: BTreeSet<&str> = owned_queries(Backend::Postgres).iter().map(|(c, _)| *c).collect();
         assert_eq!(cats, BTreeSet::from([CAT_CONTENT, CAT_CACHE, CAT_INDEX]));
     }
 
@@ -439,31 +484,37 @@ mod tests {
     /// violation and a double count waiting to happen.
     #[test]
     fn queries_only_read_the_notes_schema() {
-        for (_, sql) in OWNED_QUERIES.iter().map(|(c, s)| (c, *s)).chain([(&"", DELEGATED_QUERY)]) {
-            let lowered = sql.to_lowercase();
-            for foreign in ["drive.", "core.", "office.", "chat.", "photos."] {
+        for backend in [Backend::Postgres, Backend::MySql, Backend::Sqlite] {
+            let owned = owned_queries(backend);
+            let delegated = delegated_query(backend);
+            for sql in owned.iter().map(|(_, s)| s.as_str()).chain([delegated.as_str()]) {
+                let lowered = sql.to_lowercase();
+                for foreign in ["drive.", "core.", "office.", "chat.", "photos."] {
+                    assert!(
+                        !lowered.contains(foreign),
+                        "la requête lit le schéma « {foreign} » : {sql}"
+                    );
+                }
                 assert!(
-                    !lowered.contains(foreign),
-                    "la requête lit le schéma « {foreign} » : {sql}"
+                    lowered.contains("notes."),
+                    "la requête ne lit aucune table de notes : {sql}"
                 );
             }
-            assert!(
-                lowered.contains("notes."),
-                "la requête ne lit aucune table de notes : {sql}"
-            );
         }
     }
 
     /// Every statement must yield a line per account.
     #[test]
     fn queries_group_by_an_owner() {
-        for (_, sql) in OWNED_QUERIES {
-            assert!(
-                sql.to_lowercase().contains("group by owner_id"),
-                "requête sans GROUP BY owner_id — une ligne par compte est le contrat : {sql}"
-            );
+        for backend in [Backend::Postgres, Backend::MySql, Backend::Sqlite] {
+            for (_, sql) in owned_queries(backend) {
+                assert!(
+                    sql.to_lowercase().contains("group by owner_id"),
+                    "requête sans GROUP BY owner_id — une ligne par compte est le contrat : {sql}"
+                );
+            }
+            assert!(delegated_query(backend).to_lowercase().contains("group by owner_id"));
         }
-        assert!(DELEGATED_QUERY.to_lowercase().contains("group by owner_id"));
     }
 
     #[test]

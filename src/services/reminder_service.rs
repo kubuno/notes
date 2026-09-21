@@ -1,89 +1,90 @@
 use anyhow::{Context, Result};
-use sqlx::PgPool;
+use kubuno_db::{new_id, params, DbPool};
 use uuid::Uuid;
 
 use crate::models::{CreateReminderDto, Reminder, UpdateReminderDto};
 
-pub async fn list_reminders(db: &PgPool, note_id: Uuid, owner_id: Uuid) -> Result<Vec<Reminder>> {
-    let reminders = sqlx::query_as::<_, Reminder>(
-        "SELECT * FROM reminders WHERE note_id = $1 AND owner_id = $2 ORDER BY fire_at",
-    )
-    .bind(note_id)
-    .bind(owner_id)
-    .fetch_all(db)
-    .await
-    .context("list_reminders")?;
+pub async fn list_reminders(db: &DbPool, note_id: Uuid, owner_id: Uuid) -> Result<Vec<Reminder>> {
+    let reminders = db
+        .fetch_all_as::<Reminder>(
+            "SELECT * FROM notes.reminders WHERE note_id = $1 AND owner_id = $2 ORDER BY fire_at",
+            params![note_id, owner_id],
+        )
+        .await
+        .context("list_reminders")?;
     Ok(reminders)
 }
 
 pub async fn create_reminder(
-    db: &PgPool,
+    db: &DbPool,
     note_id: Uuid,
     owner_id: Uuid,
     dto: CreateReminderDto,
 ) -> Result<Reminder> {
-    let method     = dto.method.as_deref().unwrap_or("notification");
+    let id = new_id();
+    let method = dto.method.as_deref().unwrap_or("notification");
     let recurrence = dto.recurrence.as_deref().unwrap_or("once");
+    let now = chrono::Utc::now();
 
-    let reminder = sqlx::query_as::<_, Reminder>(
-        r#"INSERT INTO reminders (note_id, owner_id, fire_at, method, recurrence)
-           VALUES ($1, $2, $3, $4, $5)
-           RETURNING *"#,
+    // Reminders are not part of the delta sync, so no change_seq / journal here;
+    // the id is generated in Rust and the row read back by id (no RETURNING).
+    db.execute(
+        "INSERT INTO notes.reminders (id, note_id, owner_id, fire_at, method, recurrence, created_at) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        params![id, note_id, owner_id, dto.fire_at, method, recurrence, now],
     )
-    .bind(note_id)
-    .bind(owner_id)
-    .bind(dto.fire_at)
-    .bind(method)
-    .bind(recurrence)
-    .fetch_one(db)
     .await
     .context("create_reminder")?;
-    Ok(reminder)
+
+    db.fetch_one_as::<Reminder>("SELECT * FROM notes.reminders WHERE id = $1", params![id])
+        .await
+        .context("create_reminder reselect")
 }
 
 pub async fn update_reminder(
-    db: &PgPool,
+    db: &DbPool,
     id: Uuid,
     note_id: Uuid,
     owner_id: Uuid,
     dto: UpdateReminderDto,
 ) -> Result<Option<Reminder>> {
-    let reminder = sqlx::query_as::<_, Reminder>(
-        r#"UPDATE reminders
-           SET fire_at    = COALESCE($1, fire_at),
-               method     = COALESCE($2, method),
-               recurrence = COALESCE($3, recurrence),
-               sent_at    = NULL
-           WHERE id = $4 AND note_id = $5 AND owner_id = $6
-           RETURNING *"#,
+    // Confirm the reminder exists and belongs to this note/owner before writing,
+    // so a MySQL re-select by id cannot resurrect a row a guard would have missed.
+    let owns: Option<Uuid> = db
+        .fetch_optional_scalar::<Uuid>(
+            "SELECT id FROM notes.reminders WHERE id = $1 AND note_id = $2 AND owner_id = $3",
+            params![id, note_id, owner_id],
+        )
+        .await
+        .context("update_reminder check")?;
+    if owns.is_none() {
+        return Ok(None);
+    }
+
+    db.execute(
+        "UPDATE notes.reminders \
+         SET fire_at    = COALESCE($1, fire_at), \
+             method     = COALESCE($2, method), \
+             recurrence = COALESCE($3, recurrence), \
+             sent_at    = NULL \
+         WHERE id = $4 AND note_id = $5 AND owner_id = $6",
+        params![dto.fire_at, dto.method.as_deref(), dto.recurrence.as_deref(), id, note_id, owner_id],
     )
-    .bind(dto.fire_at)
-    .bind(dto.method.as_deref())
-    .bind(dto.recurrence.as_deref())
-    .bind(id)
-    .bind(note_id)
-    .bind(owner_id)
-    .fetch_optional(db)
     .await
     .context("update_reminder")?;
-    Ok(reminder)
+
+    db.fetch_optional_as::<Reminder>("SELECT * FROM notes.reminders WHERE id = $1", params![id])
+        .await
+        .context("update_reminder reselect")
 }
 
-pub async fn delete_reminder(
-    db: &PgPool,
-    id: Uuid,
-    note_id: Uuid,
-    owner_id: Uuid,
-) -> Result<bool> {
-    let rows = sqlx::query(
-        "DELETE FROM reminders WHERE id = $1 AND note_id = $2 AND owner_id = $3",
-    )
-    .bind(id)
-    .bind(note_id)
-    .bind(owner_id)
-    .execute(db)
-    .await
-    .context("delete_reminder")?
-    .rows_affected();
+pub async fn delete_reminder(db: &DbPool, id: Uuid, note_id: Uuid, owner_id: Uuid) -> Result<bool> {
+    let rows = db
+        .execute(
+            "DELETE FROM notes.reminders WHERE id = $1 AND note_id = $2 AND owner_id = $3",
+            params![id, note_id, owner_id],
+        )
+        .await
+        .context("delete_reminder")?;
     Ok(rows > 0)
 }

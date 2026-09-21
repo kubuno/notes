@@ -4,11 +4,17 @@
 //! `kind ∈ modified | trashed | deleted` (notebooks/labels have no trash → only
 //! modified/deleted). Note changes carry their label assignments inline, and
 //! `include=content` inlines the whole `.kbnot` envelope.
+//!
+//! The change feed comes from `kubuno_db::journal::changes_since` (the portable
+//! `live UNION ALL tombstones`, replacing the PostgreSQL-only sequence/trigger
+//! delta layer). The row bodies are reselected as typed structs and serialised
+//! in Rust — no `to_jsonb`.
 
 use axum::{
     extract::{Query, State},
     Extension, Json,
 };
+use kubuno_db::{journal, DbValue};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -18,6 +24,7 @@ use crate::{
     models::{Label, Note, Notebook},
     services::content_files,
     state::AppState,
+    sync,
 };
 
 #[derive(serde::Deserialize)]
@@ -29,31 +36,22 @@ pub struct DeltaQuery {
     include: Option<String>,
 }
 
-async fn union_rows(
+/// Reselects live rows by id, portably (`id IN (...)`, never `= ANY`).
+async fn fetch_by_ids<T: kubuno_db::FromAnyRow>(
     state: &AppState,
-    user: Uuid,
-    live: &str,
-    tomb: &str,
-    cursor: i64,
-    limit: i64,
-) -> Result<Vec<(Uuid, i64, String)>> {
-    // Audited: `live` and `tomb` are table names supplied by this module's own
-    // call sites as literals — never by a request — and every value is bound.
-    let rows: Vec<(Uuid, i64, String)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
-        r#"SELECT id, change_seq, 'live'::text AS src FROM {live}
-               WHERE owner_id = $1 AND change_seq > $2
-           UNION ALL
-           SELECT id, change_seq, 'tomb'::text AS src FROM {tomb}
-               WHERE owner_id = $1 AND change_seq > $2
-           ORDER BY change_seq
-           LIMIT $3"#
-    )))
-    .bind(user)
-    .bind(cursor)
-    .bind(limit)
-    .fetch_all(&state.db)
-    .await?;
-    Ok(rows)
+    table: &str,
+    ids: &[Uuid],
+) -> Result<Vec<T>> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let list = state.db.backend().in_list(1, ids.len());
+    let sql = format!("SELECT * FROM {table} WHERE id IN ({list})");
+    let mut binds: Vec<DbValue> = Vec::with_capacity(ids.len());
+    for id in ids {
+        binds.push((*id).into());
+    }
+    Ok(state.db.fetch_all_as::<T>(&sql, binds).await?)
 }
 
 /// GET /notes/delta
@@ -63,27 +61,33 @@ pub async fn notes_delta(
     Query(q): Query<DeltaQuery>,
 ) -> Result<Json<Value>> {
     let limit = q.limit.unwrap_or(200).clamp(1, 500);
-    let rows = union_rows(&state, user.id, "notes", "note_tombstones", q.cursor, limit).await?;
-    let has_more = rows.len() as i64 == limit;
-    let new_cursor = rows.last().map(|r| r.1).unwrap_or(q.cursor);
-    let live_ids: Vec<Uuid> = rows.iter().filter(|r| r.2 == "live").map(|r| r.0).collect();
+    let feed = journal::changes_since(
+        &state.db, sync::NOTES_TABLE, sync::NOTE_TOMBSTONES, user.id, q.cursor, limit,
+    )
+    .await?;
+    let has_more = feed.len() as i64 == limit;
+    let new_cursor = feed.last().map(|c| c.change_seq).unwrap_or(q.cursor);
+    let live_ids: Vec<Uuid> = feed.iter().filter(|c| !c.deleted).map(|c| c.id).collect();
 
-    let items: Vec<Note> = if live_ids.is_empty() {
-        Vec::new()
-    } else {
-        sqlx::query_as::<_, Note>("SELECT * FROM notes WHERE id = ANY($1)")
-            .bind(&live_ids)
-            .fetch_all(&state.db)
-            .await?
-    };
+    let items: Vec<Note> = fetch_by_ids(&state, "notes.notes", &live_ids).await?;
+
     // Label assignments ride along with each note.
     let links: Vec<(Uuid, Uuid)> = if live_ids.is_empty() {
         Vec::new()
     } else {
-        sqlx::query_as("SELECT note_id, label_id FROM note_labels WHERE note_id = ANY($1)")
-            .bind(&live_ids)
-            .fetch_all(&state.db)
+        let list = state.db.backend().in_list(1, live_ids.len());
+        let sql = format!("SELECT note_id, label_id FROM notes.note_labels WHERE note_id IN ({list})");
+        let mut binds: Vec<DbValue> = Vec::with_capacity(live_ids.len());
+        for id in &live_ids {
+            binds.push((*id).into());
+        }
+        state
+            .db
+            .fetch_all_as::<LinkRow>(&sql, binds)
             .await?
+            .into_iter()
+            .map(|r| (r.note_id, r.label_id))
+            .collect()
     };
     let mut label_map: std::collections::HashMap<Uuid, Vec<Uuid>> = std::collections::HashMap::new();
     for (nid, lid) in links {
@@ -106,20 +110,20 @@ pub async fn notes_delta(
         }
     }
 
-    let mut changes = Vec::with_capacity(rows.len());
-    for (id, seq, src) in &rows {
-        if src == "tomb" {
-            changes.push(json!({ "uuid": id, "kind": "deleted", "change_seq": seq }));
-        } else if let Some(n) = item_map.get(id) {
+    let mut changes = Vec::with_capacity(feed.len());
+    for c in &feed {
+        if c.deleted {
+            changes.push(json!({ "uuid": c.id, "kind": "deleted", "change_seq": c.change_seq }));
+        } else if let Some(n) = item_map.get(&c.id) {
             let empty: Vec<Uuid> = Vec::new();
             let mut change = json!({
-                "uuid": id,
+                "uuid": c.id,
                 "kind": if n.is_trashed { "trashed" } else { "modified" },
-                "change_seq": seq,
+                "change_seq": c.change_seq,
                 "note": n,
-                "labels": label_map.get(id).unwrap_or(&empty),
+                "labels": label_map.get(&c.id).unwrap_or(&empty),
             });
-            if let Some(content) = content_map.get(id) {
+            if let Some(content) = content_map.get(&c.id) {
                 change["content"] = content.clone();
             }
             changes.push(change);
@@ -135,27 +139,23 @@ pub async fn notebooks_delta(
     Query(q): Query<DeltaQuery>,
 ) -> Result<Json<Value>> {
     let limit = q.limit.unwrap_or(200).clamp(1, 500);
-    let rows = union_rows(&state, user.id, "notebooks", "notebook_tombstones", q.cursor, limit).await?;
-    let has_more = rows.len() as i64 == limit;
-    let new_cursor = rows.last().map(|r| r.1).unwrap_or(q.cursor);
-    let live_ids: Vec<Uuid> = rows.iter().filter(|r| r.2 == "live").map(|r| r.0).collect();
-    let items: Vec<Notebook> = if live_ids.is_empty() {
-        Vec::new()
-    } else {
-        sqlx::query_as::<_, Notebook>("SELECT * FROM notebooks WHERE id = ANY($1)")
-            .bind(&live_ids)
-            .fetch_all(&state.db)
-            .await?
-    };
+    let feed = journal::changes_since(
+        &state.db, sync::NOTEBOOKS_TABLE, sync::NOTEBOOK_TOMBSTONES, user.id, q.cursor, limit,
+    )
+    .await?;
+    let has_more = feed.len() as i64 == limit;
+    let new_cursor = feed.last().map(|c| c.change_seq).unwrap_or(q.cursor);
+    let live_ids: Vec<Uuid> = feed.iter().filter(|c| !c.deleted).map(|c| c.id).collect();
+    let items: Vec<Notebook> = fetch_by_ids(&state, "notes.notebooks", &live_ids).await?;
     let item_map: std::collections::HashMap<Uuid, &Notebook> = items.iter().map(|n| (n.id, n)).collect();
-    let changes: Vec<Value> = rows
+    let changes: Vec<Value> = feed
         .iter()
-        .filter_map(|(id, seq, src)| {
-            if src == "tomb" {
-                Some(json!({ "uuid": id, "kind": "deleted", "change_seq": seq }))
+        .filter_map(|c| {
+            if c.deleted {
+                Some(json!({ "uuid": c.id, "kind": "deleted", "change_seq": c.change_seq }))
             } else {
-                item_map.get(id).map(|n| {
-                    json!({ "uuid": id, "kind": "modified", "change_seq": seq, "notebook": n })
+                item_map.get(&c.id).map(|n| {
+                    json!({ "uuid": c.id, "kind": "modified", "change_seq": c.change_seq, "notebook": n })
                 })
             }
         })
@@ -170,30 +170,32 @@ pub async fn labels_delta(
     Query(q): Query<DeltaQuery>,
 ) -> Result<Json<Value>> {
     let limit = q.limit.unwrap_or(200).clamp(1, 500);
-    let rows = union_rows(&state, user.id, "labels", "label_tombstones", q.cursor, limit).await?;
-    let has_more = rows.len() as i64 == limit;
-    let new_cursor = rows.last().map(|r| r.1).unwrap_or(q.cursor);
-    let live_ids: Vec<Uuid> = rows.iter().filter(|r| r.2 == "live").map(|r| r.0).collect();
-    let items: Vec<Label> = if live_ids.is_empty() {
-        Vec::new()
-    } else {
-        sqlx::query_as::<_, Label>("SELECT * FROM labels WHERE id = ANY($1)")
-            .bind(&live_ids)
-            .fetch_all(&state.db)
-            .await?
-    };
+    let feed = journal::changes_since(
+        &state.db, sync::LABELS_TABLE, sync::LABEL_TOMBSTONES, user.id, q.cursor, limit,
+    )
+    .await?;
+    let has_more = feed.len() as i64 == limit;
+    let new_cursor = feed.last().map(|c| c.change_seq).unwrap_or(q.cursor);
+    let live_ids: Vec<Uuid> = feed.iter().filter(|c| !c.deleted).map(|c| c.id).collect();
+    let items: Vec<Label> = fetch_by_ids(&state, "notes.labels", &live_ids).await?;
     let item_map: std::collections::HashMap<Uuid, &Label> = items.iter().map(|l| (l.id, l)).collect();
-    let changes: Vec<Value> = rows
+    let changes: Vec<Value> = feed
         .iter()
-        .filter_map(|(id, seq, src)| {
-            if src == "tomb" {
-                Some(json!({ "uuid": id, "kind": "deleted", "change_seq": seq }))
+        .filter_map(|c| {
+            if c.deleted {
+                Some(json!({ "uuid": c.id, "kind": "deleted", "change_seq": c.change_seq }))
             } else {
-                item_map.get(id).map(|l| {
-                    json!({ "uuid": id, "kind": "modified", "change_seq": seq, "label": l })
+                item_map.get(&c.id).map(|l| {
+                    json!({ "uuid": c.id, "kind": "modified", "change_seq": c.change_seq, "label": l })
                 })
             }
         })
         .collect();
     Ok(Json(json!({ "changes": changes, "cursor": new_cursor, "has_more": has_more })))
+}
+
+#[derive(sqlx::FromRow)]
+struct LinkRow {
+    note_id: Uuid,
+    label_id: Uuid,
 }

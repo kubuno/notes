@@ -9,6 +9,21 @@ number at release time, and CI publishes that section as the GitHub Release note
 
 ## [Unreleased]
 
+### Changed
+
+- **Notes now runs on PostgreSQL, MySQL/MariaDB or SQLite.** The database engine
+  is an administrator's choice, made in configuration and read when the module
+  starts; the same build connects to whichever is named. Everything a note holds
+  — your notes and their backlinks, notebooks, labels, reminders and share links
+  — behaves the same on all three, and existing PostgreSQL instances upgrade in
+  place with no change to their data.
+- **Search stays the same on every engine.** Note titles, bodies and voice-note
+  transcripts are reduced to French word stems with accents folded, so a plural
+  finds its singular and a query without accents still finds an accented note,
+  identically whether the instance runs on PostgreSQL, MySQL/MariaDB or SQLite.
+  One consequence of the move: a misspelling that does not survive stemming no
+  longer matches (the previous PostgreSQL-only fuzzy matching is gone).
+
 ### Fixed
 
 - **A note reminder is no longer delivered several times over.** When more than

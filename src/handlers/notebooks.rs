@@ -35,7 +35,8 @@ pub async fn create(
     let notebook = notebook_service::create_notebook(&state.db, user.id, dto)
         .await
         .map_err(|e| {
-            if e.to_string().contains("unique") {
+            let m = e.to_string().to_lowercase();
+            if m.contains("unique") || m.contains("duplicate") {
                 NotesError::Conflict("Un notebook avec ce nom existe déjà".into())
             } else {
                 NotesError::Internal(e)

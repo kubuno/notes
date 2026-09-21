@@ -2,26 +2,17 @@ use axum::{
     extract::{Path, State},
     Json,
 };
+use kubuno_db::params;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::{errors::{NotesError, Result}, state::AppState};
 
+#[derive(sqlx::FromRow)]
 struct ShareRow {
     id:         Uuid,
     note_id:    Uuid,
     expires_at: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-impl sqlx::FromRow<'_, sqlx::postgres::PgRow> for ShareRow {
-    fn from_row(row: &sqlx::postgres::PgRow) -> sqlx::Result<Self> {
-        use sqlx::Row;
-        Ok(Self {
-            id:         row.try_get("id")?,
-            note_id:    row.try_get("note_id")?,
-            expires_at: row.try_get("expires_at")?,
-        })
-    }
 }
 
 pub async fn get_shared_note(
@@ -37,14 +28,15 @@ pub async fn get_shared_note(
     }
 
     // Récupérer le partage
-    let share = sqlx::query_as::<_, ShareRow>(
-        "SELECT id, note_id, expires_at FROM shares WHERE token = $1 AND is_active = TRUE",
-    )
-    .bind(&token)
-    .fetch_optional(&state.db)
-    .await
-    .map_err(NotesError::Database)?
-    .ok_or_else(|| NotesError::NotFound("Partage introuvable".into()))?;
+    let share = state
+        .db
+        .fetch_optional_as::<ShareRow>(
+            "SELECT id, note_id, expires_at FROM notes.shares WHERE token = $1 AND is_active = $2",
+            params![&token, true],
+        )
+        .await
+        .map_err(NotesError::Database)?
+        .ok_or_else(|| NotesError::NotFound("Partage introuvable".into()))?;
 
     if let Some(exp) = share.expires_at {
         if exp < chrono::Utc::now() {
@@ -52,26 +44,32 @@ pub async fn get_shared_note(
         }
     }
 
-    // Incrémenter view_count
-    let _ = sqlx::query("UPDATE shares SET view_count = view_count + 1, last_accessed_at = NOW() WHERE id = $1")
-        .bind(share.id)
-        .execute(&state.db)
+    // Incrémenter view_count (les partages ne font pas partie de la sync delta).
+    let _ = state
+        .db
+        .execute(
+            "UPDATE notes.shares SET view_count = view_count + 1, last_accessed_at = $1 WHERE id = $2",
+            params![chrono::Utc::now(), share.id],
+        )
         .await;
 
     // Récupérer la note
-    let note = sqlx::query_as::<_, crate::models::Note>(
-        "SELECT * FROM notes WHERE id = $1 AND is_trashed = FALSE",
-    )
-    .bind(share.note_id)
-    .fetch_optional(&state.db)
-    .await
-    .map_err(NotesError::Database)?
-    .ok_or_else(|| NotesError::NotFound("Note introuvable".into()))?;
+    let note = state
+        .db
+        .fetch_optional_as::<crate::models::Note>(
+            "SELECT * FROM notes.notes WHERE id = $1 AND is_trashed = $2",
+            params![share.note_id, false],
+        )
+        .await
+        .map_err(NotesError::Database)?
+        .ok_or_else(|| NotesError::NotFound("Note introuvable".into()))?;
 
     // Contenu HTML lu depuis le fichier .kbnot.
     let content_html = match note.file_id {
-        Some(fid) => crate::services::content_files::read_note(&state, note.owner_id, fid).await
-            .map(|(_, html)| html).unwrap_or_default(),
+        Some(fid) => crate::services::content_files::read_note(&state, note.owner_id, fid)
+            .await
+            .map(|(_, html)| html)
+            .unwrap_or_default(),
         None => String::new(),
     };
 
