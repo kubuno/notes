@@ -36,6 +36,12 @@ number at release time, and CI publishes that section as the GitHub Release note
 
 ### Security
 
+- **Security fixes from the shared database layer (kubuno-db 0.9.0).** The
+  database password can no longer appear in a log through the debug output of
+  the database settings. A search now keeps at most 16 distinct words (set for the
+  whole instance by the core's `[search] max_terms`), so a single request can
+  no longer overload the database.
+
 - **Database driver updated past an unfixable advisory.** The previous line
   pulled in an RSA implementation vulnerable to a timing side-channel
   (RUSTSEC-2023-0071) for which no fix will ever exist. The new line does not
