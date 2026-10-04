@@ -1,0 +1,21 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "Kubuno notes (Chrome)",
+      "url": "http://localhost:8080/notes",
+      "webRoot": "${workspaceFolder}",
+      "sourceMapPathOverrides": { "http://localhost:8080/modules/notes/*": "${workspaceFolder}/dist/*" }
+    }
+    {
+      "type": "edge",
+      "request": "launch",
+      "name": "Kubuno notes (Edge)",
+      "url": "http://localhost:8080/notes",
+      "webRoot": "${workspaceFolder}",
+      "sourceMapPathOverrides": { "http://localhost:8080/modules/notes/*": "${workspaceFolder}/dist/*" }
+    },
+  ]
+}

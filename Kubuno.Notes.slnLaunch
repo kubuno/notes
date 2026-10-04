@@ -1,0 +1,15 @@
+[
+  {
+    "Name": "Notes (Kubuno Core + browser)",
+    "Projects": [
+      {
+        "Path": "Kubuno.Notes.Server.rsproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "frontend\\Kubuno.Notes.Web.esproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]
