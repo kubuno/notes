@@ -199,10 +199,8 @@ async fn main() -> Result<()> {
     }
 
     let http = Client::new();
-    let files_client = Arc::new(kubuno_notes::files_client::FilesClient::new(
-        settings.core.files_url.clone(),
-        settings.core.internal_secret.clone(),
-    ));
+    // Reaches `drive` through the core's IPC relay, never directly.
+    let files_client = Arc::new(settings.core.files_client());
 
     // Instance settings: compiled defaults, then one read from the core.
     let instance = Arc::new(std::sync::RwLock::new(
