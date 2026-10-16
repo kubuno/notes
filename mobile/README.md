@@ -1,4 +1,4 @@
-# Kubuno Notes — mobile apps
+# Kubuno Notes - mobile apps
 
 Reserved for the mobile clients of the Notes module, organised like the other platforms of this repository:
 

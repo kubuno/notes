@@ -8,26 +8,26 @@
 //! is a `.kbnot` file written into **drive** through `FilesClient`, referenced by
 //! `notes.notes.file_id`. Drive weighs those bytes and declares them as
 //! `content`. Notes declaring them again would be exactly the double counting
-//! this channel exists to prevent, so the body is never emitted here — the
+//! this channel exists to prevent, so the body is never emitted here - the
 //! `delegated` line names the objects instead, with no weight, because notes
 //! knows how many it caused and drive knows what they weigh.
 //!
 //! ## What notes actually holds
 //!
-//! * `content` — the parts of a note that exist **only** here and that the
+//! * `content` - the parts of a note that exist **only** here and that the
 //!   account can delete: the checklist items and a voice note's transcript.
 //!   `content_files` writes the markdown body to drive; it does not mirror these
 //!   columns into the file, so nobody else is counting them. Billed, because the
 //!   rule is "an account is billed for what it can free itself" and deleting the
 //!   note frees exactly this.
-//! * `cache` — the truncated `preview` shown in the list, and the tombstone
+//! * `cache` - the truncated `preview` shown in the list, and the tombstone
 //!   journals the offline sync replays. Both are regenerable: the preview from
 //!   the drive file, the tombstones from the fact that the row is gone. Not
 //!   billed.
-//! * `index` — the normalized search columns (`title_norm` / `body_norm` /
+//! * `index` - the normalized search columns (`title_norm` / `body_norm` /
 //!   `transcript_norm`). The module's own lookup structure, built at write time
 //!   from content it does not keep. Not billed.
-//! * `delegated` — how many notes caused a drive file to exist. Weight is
+//! * `delegated` - how many notes caused a drive file to exist. Weight is
 //!   deliberately zero and the core never adds this line to any total; it exists
 //!   so that "notes looks like it stores nothing" reads as *delegation* rather
 //!   than as a broken reporter.
@@ -38,7 +38,7 @@
 //! [`col_bytes`]). On PostgreSQL these figures state what the module occupies
 //! **in the database**, with this text and JSON stored TOASTed and compressed;
 //! the other two engines have no such introspection function, so the logical
-//! byte length stands in — an honest figure, just not the on-disk one.
+//! byte length stands in - an honest figure, just not the on-disk one.
 //!
 //! ## State, never deltas
 //!
@@ -61,7 +61,7 @@ use crate::state::AppState;
 ///
 /// PostgreSQL's `pg_column_size` reports the on-disk (TOASTed, compressed) size;
 /// MySQL and SQLite have no equivalent introspection function, so the logical
-/// byte length (`LENGTH`) stands in — an honest figure, counting bytes on MySQL
+/// byte length (`LENGTH`) stands in - an honest figure, counting bytes on MySQL
 /// and characters on SQLite.
 fn col_bytes(backend: Backend, col: &str) -> String {
     match backend {
@@ -229,7 +229,7 @@ struct Entry {
 /// A failing query is logged and skipped rather than aborting the whole
 /// declaration: one broken table should cost its own line, not the entire
 /// breakdown. The declaration is still marked `full`, which means a category that
-/// failed here is *retired* by the core until the next sync repairs it — the
+/// failed here is *retired* by the core until the next sync repairs it - the
 /// honest outcome, since publishing a stale figure as current state would be
 /// worse than publishing none.
 async fn collect(db: &DbPool) -> Vec<Entry> {
@@ -250,7 +250,7 @@ async fn collect(db: &DbPool) -> Vec<Entry> {
             Err(e) => tracing::error!(
                 error = %e,
                 catégorie = category,
-                "Recomptage de consommation échoué pour une requête — catégorie incomplète"
+                "Recomptage de consommation échoué pour une requête - catégorie incomplète"
             ),
         }
     }
@@ -262,7 +262,7 @@ async fn collect(db: &DbPool) -> Vec<Entry> {
         Ok(rows) => {
             for (user_id, objects) in rows {
                 // `used_bytes: 0` is deliberate and load-bearing. Notes knows how
-                // many files it caused, never what they weigh — drive weighs them
+                // many files it caused, never what they weigh - drive weighs them
                 // and declares them as `content`.
                 let slot = acc.entry((user_id, CAT_DELEGATED)).or_insert((0, 0));
                 slot.1 += objects;
@@ -281,7 +281,7 @@ async fn collect(db: &DbPool) -> Vec<Entry> {
         })
         .collect();
 
-    // Stable order so consecutive declarations chunk identically — a moving
+    // Stable order so consecutive declarations chunk identically - a moving
     // chunk boundary would make partial declarations retire different accounts
     // each time.
     entries.sort_by(|a, b| (a.user_id, a.category).cmp(&(b.user_id, b.category)));
@@ -340,7 +340,7 @@ async fn send(
     }
 
     // The status alone does not say which of several validations refused the
-    // declaration, and this runs unattended — a log line reading "HTTP 422" costs
+    // declaration, and this runs unattended - a log line reading "HTTP 422" costs
     // an afternoon the next time the contract shifts.
     let status = resp.status();
     let detail = resp.text().await.unwrap_or_default();
@@ -441,16 +441,16 @@ mod tests {
 
     /// The rule this module exists to respect, checked mechanically.
     ///
-    /// A note's body is a drive file. Notes measuring it — by reading `file_id`
+    /// A note's body is a drive file. Notes measuring it - by reading `file_id`
     /// for anything other than counting, or by weighing a column that mirrors the
-    /// body — would double-count exactly the quantity the core bills.
+    /// body - would double-count exactly the quantity the core bills.
     #[test]
     fn the_body_is_never_weighed_here() {
         for backend in [Backend::Postgres, Backend::MySql, Backend::Sqlite] {
             for (category, sql) in owned_queries(backend) {
                 assert!(
                     !sql.to_lowercase().contains("file_id"),
-                    "une requête pesée touche à file_id — le corps appartient à drive : {sql}"
+                    "une requête pesée touche à file_id - le corps appartient à drive : {sql}"
                 );
                 assert_ne!(
                     category, CAT_DELEGATED,
@@ -510,7 +510,7 @@ mod tests {
             for (_, sql) in owned_queries(backend) {
                 assert!(
                     sql.to_lowercase().contains("group by owner_id"),
-                    "requête sans GROUP BY owner_id — une ligne par compte est le contrat : {sql}"
+                    "requête sans GROUP BY owner_id - une ligne par compte est le contrat : {sql}"
                 );
             }
             assert!(delegated_query(backend).to_lowercase().contains("group by owner_id"));

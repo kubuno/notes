@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 
 // Editor-side instance defaults, as the administrator left them in the console.
 // These act inside the running editor (autosave cadence, spell check), so they
-// are declared `public` in notes' module.toml — which is what puts them in
+// are declared `public` in notes' module.toml - which is what puts them in
 // `/api/v1/config` under `notes.<key>`, the only config route a non-admin
 // editor may read. A missing key falls back to the compiled default.
 

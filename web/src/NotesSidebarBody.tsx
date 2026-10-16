@@ -38,7 +38,7 @@ export default function NotesSidebarBody({ collapsed = false }: { collapsed?: bo
   }, [hash, setView, setActiveNotebook, setActiveLabel])
 
   // Section header ("Notebooks", "Labels"): collapsing a section is a pure
-  // in-page action, so it is an anchor-button — href="#", Space wired by hand,
+  // in-page action, so it is an anchor-button - href="#", Space wired by hand,
   // Enter handled natively by the anchor. Never a <button> in the sidebar.
   const sectionCls =
     `flex items-center gap-2 w-full px-3 py-1 text-[10px] font-bold no-underline cursor-pointer

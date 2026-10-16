@@ -117,7 +117,7 @@ export default function NotesMiniPanel() {
         </button>
       </div>
 
-      {/* Liste des notes — pas de fond propre : le panneau de droite du shell fournit
+      {/* Liste des notes - pas de fond propre : le panneau de droite du shell fournit
           le blanc, et le teinter ici le recouvrait sur la moitié basse. */}
       <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-2 pt-2">
         {isLoading && (

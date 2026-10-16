@@ -89,7 +89,7 @@ pub async fn create(
     let token = URL_SAFE_NO_PAD.encode(token_bytes);
 
     // Lifetime ceiling: an unbounded link, or one asking for longer than the
-    // administrator allows, is clamped instead of refused — the user still gets
+    // administrator allows, is clamped instead of refused - the user still gets
     // a link, it just does not outlive the policy. `0` means "no ceiling".
     let requested = dto.expires_in_days.filter(|d| *d > 0);
     let expires_at = match (requested, cfg.share_link_max_days) {

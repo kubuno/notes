@@ -5,7 +5,7 @@ import { useNotesStore } from './store'
 
 /**
  * Items for the sidebar "New" button (`shell.new-actions` extension point).
- * Built when the menu opens — fresh labels and store state, no hooks.
+ * Built when the menu opens - fresh labels and store state, no hooks.
  */
 export function newActionItems(): MenuItem[] {
   if (!window.location.pathname.startsWith('/notes')) return []

@@ -1,9 +1,9 @@
 //! Stockage du CONTENU des notes dans le module `files` (plus en base).
 //!
-//! Format Kubuno propre aux notes — MIME `application/vnd.kubuno.note+json`,
+//! Format Kubuno propre aux notes - MIME `application/vnd.kubuno.note+json`,
 //! extension `.kbnot`, JSON gzippé. La base ne garde que la référence `file_id`,
 //! un aperçu tronqué (`preview`) pour la liste, et le `search_vector` dérivé
-//! (index FTS — le contenu lui-même n'est jamais stocké en base).
+//! (index FTS - le contenu lui-même n'est jamais stocké en base).
 //!
 //! Les notes vivent dans le dossier **protégé** `Notes/` (icône Lucide StickyNote).
 
@@ -91,7 +91,7 @@ pub async fn delete_note_file(state: &AppState, user_id: Uuid, file_id: Uuid) {
     let _ = state.files_client.delete_file(user_id, file_id).await;
 }
 
-/// Aperçu tronqué (texte brut) pour l'affichage en liste — pas le contenu complet.
+/// Aperçu tronqué (texte brut) pour l'affichage en liste - pas le contenu complet.
 pub fn make_preview(content: &str) -> String {
     let flat: String = content.split_whitespace().collect::<Vec<_>>().join(" ");
     flat.chars().take(280).collect()

@@ -33,8 +33,8 @@ number at release time, and CI publishes that section as the GitHub Release note
 - **Notes now runs on PostgreSQL, MySQL/MariaDB or SQLite.** The database engine
   is an administrator's choice, made in configuration and read when the module
   starts; the same build connects to whichever is named. Everything a note holds
-  — your notes and their backlinks, notebooks, labels, reminders and share links
-  — behaves the same on all three, and existing PostgreSQL instances upgrade in
+  - your notes and their backlinks, notebooks, labels, reminders and share links
+  - behaves the same on all three, and existing PostgreSQL instances upgrade in
   place with no change to their data.
 - **Search stays the same on every engine.** Note titles, bodies and voice-note
   transcripts are reduced to French word stems with accents folded, so a plural
@@ -52,8 +52,8 @@ number at release time, and CI publishes that section as the GitHub Release note
   build of the same version because its migration checksums differ.
 
 - **A note reminder is no longer delivered several times over.** When more than
-  one copy of the module was running — during a restart, or on an instance that
-  keeps a spare — every one of them fired every due reminder, so the same alert
+  one copy of the module was running - during a restart, or on an instance that
+  keeps a spare - every one of them fired every due reminder, so the same alert
   arrived two, three or four times. Each reminder is now claimed by exactly one
   of them before it is sent. A recurring reminder is also moved to its next
   occurrence in the same step, so an interrupted run can no longer leave it
@@ -71,10 +71,10 @@ number at release time, and CI publishes that section as the GitHub Release note
   pulled in an RSA implementation vulnerable to a timing side-channel
   (RUSTSEC-2023-0071) for which no fix will ever exist. The new line does not
   depend on it at all, and it refuses any SQL string built at run time unless it
-  has been audited — the queries here were checked and marked.
+  has been audited - the queries here were checked and marked.
 - **Input validation library updated.** The version in use carried
   RUSTSEC-2024-0421 through its domain-name parser, which accepted Punycode
-  labels that decode to plain ASCII — a mismatch an attacker can use to make two
+  labels that decode to plain ASCII - a mismatch an attacker can use to make two
   different names look like one.
 
 ## [0.1.8] - 2026-09-18
@@ -99,24 +99,24 @@ number at release time, and CI publishes that section as the GitHub Release note
 - **This module now installs as a Kubuno package (`.kbpkg`) only.** Its system
   packages (Debian/RPM and the Windows and macOS installers) are no longer
   built: the module is distributed as one `.kbpkg` per platform (Linux, Windows,
-  macOS) that the Kubuno server installs itself — from the admin console, or
+  macOS) that the Kubuno server installs itself - from the admin console, or
   offline with `kubuno modules:install <file>.kbpkg`.
 - **Dates are formatted by the platform now, not by a library.** `date-fns` is
   gone from this module: the shared SDK exposes helpers built on `Intl`, which is
   localised for every language we ship and needs no locale bundle loaded. Call
-  sites say what a date is FOR — `formatDate(d, 'date')` — and the platform
+  sites say what a date is FOR - `formatDate(d, 'date')` - and the platform
   decides how to write it, so a reader in Japanese no longer gets a French
   layout. Machine formats (keys, `<input type="date">` values) go through
   `toISODate` and friends, built from local calendar fields so the day cannot
   shift near midnight.
 - **The README now opens with the module's logo.** The public README on
   GitHub now shows the module's designer logo (the same PNG shown as the
-  browser tab icon and in the applications menu) at the top of the page — the
+  browser tab icon and in the applications menu) at the top of the page - the
   repository landing now matches the icon a signed-in user sees inside the
   platform. The image ships in-repo, under `.github/logo.png`, so it renders
   even when the repo is browsed offline.
 
-- **New Notes logo** — an orange hexagon with a clipboard holding a note page,
+- **New Notes logo** - an orange hexagon with a clipboard holding a note page,
   used as the browser-tab icon and in the applications menu. It is now raster
   (PNG) designer artwork.
 
@@ -126,7 +126,7 @@ number at release time, and CI publishes that section as the GitHub Release note
   search bar both ways.** Opening the panel pre-fills the field with the bar's
   current text, and editing it rewrites the bar's text live (running the
   search as you type, exactly like typing in the bar). Notes' search is plain
-  free text — the view/notebook/label entries are state filters with no text
+  free text - the view/notebook/label entries are state filters with no text
   representation, so they intentionally stay panel-only.
 
 
@@ -141,11 +141,11 @@ number at release time, and CI publishes that section as the GitHub Release note
   release; the lockfile now takes the version that replaced it.
 - **The package could not be built where `zip` is absent.** The Windows job of
   the continuous integration has no `zip`, so the Windows package was simply lost
-  the first time it was attempted — a script failure, not a build failure. The
+  the first time it was attempted - a script failure, not a build failure. The
   builder now falls back to 7-Zip, then to PowerShell.
 ### Added
 
-- **This module now ships a `.kbpkg`** — the single package format a Kubuno
+- **This module now ships a `.kbpkg`** - the single package format a Kubuno
   server installs by itself, the same file on Linux, Windows and macOS. It
   carries the same binary, interface and manifest as the system packages,
   arranged the way the server expects to find a module on disk, plus a
@@ -159,7 +159,7 @@ number at release time, and CI publishes that section as the GitHub Release note
 
 - **A built package could be thrown away instead of published.** The job that
   attaches a package to the release waited ten minutes for another workflow to
-  create that release, then gave up with "release never appeared — build.yml
+  create that release, then gave up with "release never appeared - build.yml
   likely failed". The diagnosis was wrong: on a repository whose `.deb` takes
   longer than ten minutes to build, the release simply did not exist yet, and a
   package that had built perfectly was discarded. Four modules reached v0.1.6
@@ -182,14 +182,14 @@ number at release time, and CI publishes that section as the GitHub Release note
 
 - **Pill-shaped buttons are gone from the interface.** Filter chips, view
   segments, tab selectors and action buttons that were drawn as pills now use the
-  same 4 px corner radius as every other button — the shape set them apart for no
+  same 4 px corner radius as every other button - the shape set them apart for no
   reason other than habit. Round buttons that hold a lone icon, avatars, status
   dots and non-clickable badges keep their shape: a circle around a single glyph
   is not a pill.
 
 - Theme tokens: two colours for navigation labels (`--color-text-nav`,
   `--color-text-nav-active`). Every module carries the same token sheet, so the
-  values must match across them — whichever bundle loads last would otherwise
+  values must match across them - whichever bundle loads last would otherwise
   win. No visible change inside this module.
 
 ### Changed

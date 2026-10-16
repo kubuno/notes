@@ -1,4 +1,4 @@
-//! Sync deltas for the local-first pull (notes / notebooks / labels) — same
+//! Sync deltas for the local-first pull (notes / notebooks / labels) - same
 //! contract as the office sub-modules (Msg 32): owner-scoped changes past
 //! `cursor` (monotonic change_seq), live rows + tombstones, ordered, paginated.
 //! `kind ∈ modified | trashed | deleted` (notebooks/labels have no trash → only
@@ -8,7 +8,7 @@
 //! The change feed comes from `kubuno_db::journal::changes_since` (the portable
 //! `live UNION ALL tombstones`, replacing the PostgreSQL-only sequence/trigger
 //! delta layer). The row bodies are reselected as typed structs and serialised
-//! in Rust — no `to_jsonb`.
+//! in Rust - no `to_jsonb`.
 
 use axum::{
     extract::{Query, State},

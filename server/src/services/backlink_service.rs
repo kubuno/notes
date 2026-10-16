@@ -16,7 +16,7 @@ struct IdRow {
 /// The backlink arrays are JSON-array columns (portable across the three
 /// engines), so they are read into `Vec<Uuid>`, mutated in Rust and written back
 /// whole. Every write is a note change, so it takes a fresh `change_seq` from the
-/// journal in the same transaction — the portable replacement for the old
+/// journal in the same transaction - the portable replacement for the old
 /// `BEFORE UPDATE` seq trigger.
 pub async fn update_backlinks(
     note_id: Uuid,

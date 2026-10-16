@@ -20,7 +20,7 @@ export default function NotesFilterPanel({ onClose }: { onClose: () => void }) {
   // (backend `q`). The « Contains the words » field below mirrors it: opening
   // the panel pre-fills it with the current query, and editing it rewrites the
   // bar's text live (running the search like typing does). The view/notebook/
-  // label entries are state filters with no query-text representation — they
+  // label entries are state filters with no query-text representation - they
   // deliberately stay panel-only (no invented operators).
   const query    = useSearchStore(s => s.query)
   const setQuery = useSearchStore(s => s.setQuery)
@@ -63,7 +63,7 @@ export default function NotesFilterPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="py-2" style={{ minWidth: 240 }}>
-      {/* Contains the words — mirrors the shell search bar (two-way sync) */}
+      {/* Contains the words - mirrors the shell search bar (two-way sync) */}
       <Section title={t('notes_filter_words')} />
       <div className="px-4 pb-1.5">
         <Input
@@ -142,7 +142,7 @@ export default function NotesFilterPanel({ onClose }: { onClose: () => void }) {
             className="w-6 h-6 rounded-full border-2 border-transparent hover:scale-110 transition-transform hover:border-primary"
             style={{ backgroundColor: c.hex, boxShadow: '0 0 0 1px rgba(0,0,0,0.15)' }}
             onClick={() => {
-              // Filtre par couleur via la recherche — on laisse le store gérer
+              // Filtre par couleur via la recherche - on laisse le store gérer
               onClose()
             }}
           />

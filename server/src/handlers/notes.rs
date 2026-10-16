@@ -45,7 +45,7 @@ pub async fn create(
         .await
         .map_err(NotesError::Internal)?;
 
-    // Mettre à jour les backlinks en arrière-plan — seulement si les liens
+    // Mettre à jour les backlinks en arrière-plan - seulement si les liens
     // bidirectionnels sont activés à l'échelle de l'instance.
     if state.instance().enable_bidirectional_links {
         let db2     = state.db.clone();

@@ -4,7 +4,7 @@
 //! A bin nobody empties is not a bin, it is a second archive that keeps counting
 //! against the account's quota. The retention window comes from the admin
 //! console (`notes.trash_retention_days`), is re-read on every pass, and `0`
-//! means "never purge" — an administrator must be able to turn the sweep off
+//! means "never purge" - an administrator must be able to turn the sweep off
 //! without stopping the module.
 //!
 //! Deleting the row is not enough: a note's body lives in a `.kbnot` file in the
@@ -51,7 +51,7 @@ pub async fn start(state: AppState) {
 async fn sweep(state: &AppState, days: i32) -> Result<usize, sqlx::Error> {
     // The cutoff is computed in Rust (portable: no `make_interval` / date maths in
     // SQL). Candidates are listed first, then each is deleted with its tombstone
-    // and notebook-count adjustment in one transaction — the delta layer is the
+    // and notebook-count adjustment in one transaction - the delta layer is the
     // journal now, not a trigger, so the tombstone is written explicitly.
     let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
     let rows = state

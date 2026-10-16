@@ -1,5 +1,5 @@
 //! Runs the notes module's own migrations and delta/search primitives against a
-//! real server of **each** engine, from a single compiled binary — the proof
+//! real server of **each** engine, from a single compiled binary - the proof
 //! that the engine is a run-time choice, not a build-time one, and that the two
 //! recently-ported primitives (the change journal and the normalized full-text
 //! search) behave identically on all of them.
@@ -192,7 +192,7 @@ async fn full_suite(pool: &kubuno_db::DbPool) {
         assert!(w[1] > w[0], "change_seq must strictly increase: {seqs:?}");
     }
 
-    // The full `Note` struct must decode on every engine — checklist (JSON value)
+    // The full `Note` struct must decode on every engine - checklist (JSON value)
     // and the mentions/mentioned_by JSON arrays are the columns that differ per
     // engine, so this is the load-bearing round-trip the services rely on.
     let full: kubuno_notes::models::Note = pool

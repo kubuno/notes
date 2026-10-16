@@ -71,7 +71,7 @@ struct SettingDefRaw {
     /// Fold behind the section's "advanced" disclosure.
     #[serde(default)]
     advanced:    bool,
-    /// "info" | "warning" | "danger" — how loudly to warn before changing it.
+    /// "info" | "warning" | "danger" - how loudly to warn before changing it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     risk:        Option<String>,
     /// Bounds for `type = "int"`, enforced by the core as well as the panel.
@@ -84,7 +84,7 @@ struct SettingDefRaw {
     unit:        Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     placeholder: Option<String>,
-    /// The string value is a list, one entry per line — render a textarea.
+    /// The string value is a list, one entry per line - render a textarea.
     #[serde(default)]
     multiline:   bool,
     /// Key of a boolean setting of the same module; hidden while it is off.
@@ -238,7 +238,7 @@ async fn main() -> Result<()> {
     }
 
     // Storage usage reporter: declares to the core what notes holds per account.
-    // Started before registration on purpose — its first attempt routinely fails
+    // Started before registration on purpose - its first attempt routinely fails
     // while the core is still coming up, and its backoff is what recovers from
     // that without waiting a whole sync period.
     {
@@ -263,11 +263,11 @@ async fn main() -> Result<()> {
                 match http2.post(&url).header("X-Internal-Secret", secret.as_str()).send().await {
                     Ok(r) if r.status().is_success() => {}
                     Ok(r) if r.status() == reqwest::StatusCode::NOT_FOUND => {
-                        tracing::info!("Heartbeat 404 — ré-enregistrement…");
+                        tracing::info!("Heartbeat 404 - ré-enregistrement…");
                         register_with_core(&http2, &settings2).await;
                     }
                     Ok(r) if r.status() == reqwest::StatusCode::FORBIDDEN => {
-                        tracing::info!("Heartbeat 403 — module désactivé, attente…");
+                        tracing::info!("Heartbeat 403 - module désactivé, attente…");
                     }
                     Ok(r)  => tracing::warn!(status = %r.status(), "Heartbeat réponse inattendue"),
                     Err(e) => tracing::warn!(error = %e, "Heartbeat erreur réseau"),

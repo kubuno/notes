@@ -40,7 +40,7 @@ pub struct Note {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateNoteDto {
-    /// Optional client-minted id (local-first sync replay) — honoured verbatim.
+    /// Optional client-minted id (local-first sync replay) - honoured verbatim.
     #[serde(default)]
     pub id: Option<Uuid>,
     pub title:       Option<String>,

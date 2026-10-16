@@ -1,6 +1,6 @@
 import { ModuleServiceRegistry } from '@kubuno/sdk'
 /**
- * Cross-module data sharing (JSON envelopes over the clipboard) — thin typed
+ * Cross-module data sharing (JSON envelopes over the clipboard) - thin typed
  * facade over the platform service published by the core at runtime
  * (`ModuleServiceRegistry('core', …)`). No vendored logic: once
  * `@kubuno/sdk >= 0.1.3` is published on npm, these can become direct SDK

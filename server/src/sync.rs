@@ -5,7 +5,7 @@
 //! that used to be a `SEQUENCE` plus `BEFORE UPDATE` / `AFTER DELETE` triggers;
 //! here it is the portable [`kubuno_db::journal`] primitive, driven from Rust at
 //! every write site. This module holds the literal table / domain names those
-//! calls take — all `&'static str`, never request data — so the write sites read
+//! calls take - all `&'static str`, never request data - so the write sites read
 //! uniformly and a rename happens in one place.
 //!
 //! Three entities are versioned: **notes**, **notebooks** and **labels**.
@@ -49,7 +49,7 @@ pub async fn next_label_seq(tx: &mut kubuno_db::DbTx) -> Result<i64, sqlx::Error
     kubuno_db::journal::next_seq(tx, CHANGE_COUNTER, LABEL_DOMAIN).await
 }
 
-/// Bumps a **note** to a fresh sequence — the portable replacement for the old
+/// Bumps a **note** to a fresh sequence - the portable replacement for the old
 /// child-triggered no-op `UPDATE`. Called after a label assignment changes.
 /// Returns how many rows matched (`0` if the note is gone).
 pub async fn touch_note(tx: &mut kubuno_db::DbTx, note_id: Uuid) -> Result<u64, sqlx::Error> {

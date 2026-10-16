@@ -193,7 +193,7 @@ function SelectionBar({
         )}
       </div>
 
-      {/* Trash — also bound to the Delete key (see the main app) */}
+      {/* Trash - also bound to the Delete key (see the main app) */}
       <IconBtn
         icon={<Trash size={16} />}
         title={`${t('tip_delete')} (Suppr)`}
@@ -686,7 +686,7 @@ export default function NotesApp() {
     fetchNotes(); fetchNotebooks(); fetchLabels()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Ouverture par URL (/notes/:id) — ex. double-clic d'un .kbnot dans files.
+  // Ouverture par URL (/notes/:id) - ex. double-clic d'un .kbnot dans files.
   useEffect(() => {
     if (!routeId) return
     let alive = true

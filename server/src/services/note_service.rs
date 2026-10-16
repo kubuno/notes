@@ -19,7 +19,7 @@ fn norms(title: Option<&str>, content: &str, transcript: &str) -> (String, Strin
     )
 }
 
-/// Peuple `content` (depuis l'aperçu) pour l'affichage en liste — pas de lecture
+/// Peuple `content` (depuis l'aperçu) pour l'affichage en liste - pas de lecture
 /// fichier (perf). Le détail (`get_note`) lit le contenu complet du fichier.
 fn fill_preview(mut notes: Vec<Note>) -> Vec<Note> {
     for n in &mut notes {

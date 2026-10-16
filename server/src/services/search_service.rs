@@ -10,7 +10,7 @@
 //! Ranking mirrors the former `setweight A/B/C`: a hit in the title (weight A)
 //! outranks a hit in the body (weight B), which outranks the transcript (C).
 //!
-//! Reservation: `pg_trgm`'s typo tolerance is gone — a `LIKE '%stem%'` needs the
+//! Reservation: `pg_trgm`'s typo tolerance is gone - a `LIKE '%stem%'` needs the
 //! stem to appear as a substring. Stemming still folds inflections and the
 //! normalizer folds accents, so inflected and accented queries still match.
 

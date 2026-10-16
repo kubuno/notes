@@ -29,7 +29,7 @@ export function register() {
   // The header gear button opens the per-user Notes settings while in /notes.
   ModuleSettingsRegistry.register('notes')
 
-  // Type de fichier Kubuno produit par Notes (.kbnot) — filtrage + icône + ouverture.
+  // Type de fichier Kubuno produit par Notes (.kbnot) - filtrage + icône + ouverture.
   FileTypeRegistry.register({
     moduleId: 'notes', label: 'Notes', icon: 'StickyNote',
     mimeTypes: ['application/vnd.kubuno.note+json'],

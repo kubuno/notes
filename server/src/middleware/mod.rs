@@ -22,7 +22,7 @@ const MODULE_ID: &str = "notes";
 
 /// Middleware: authenticate the caller from the signed `X-Kubuno-Auth` token the
 /// core mints with this module's internal secret (see `kubuno-modauth`), instead
-/// of trusting the plain `X-Kubuno-User-*` headers — which any process reaching
+/// of trusting the plain `X-Kubuno-User-*` headers - which any process reaching
 /// this module's loopback port could otherwise forge to impersonate any user.
 pub async fn require_auth(
     State(state): State<AppState>,
