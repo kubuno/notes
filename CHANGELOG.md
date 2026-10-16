@@ -32,9 +32,9 @@ number at release time, and CI publishes that section as the GitHub Release note
 
 - **Notes now runs on PostgreSQL, MySQL/MariaDB or SQLite.** The database engine
   is an administrator's choice, made in configuration and read when the module
-  starts; the same build connects to whichever is named. Everything a note holds
-  - your notes and their backlinks, notebooks, labels, reminders and share links
-  - behaves the same on all three, and existing PostgreSQL instances upgrade in
+  starts; the same build connects to whichever is named. Everything a note holds -
+  your notes and their backlinks, notebooks, labels, reminders and share links -
+  behaves the same on all three, and existing PostgreSQL instances upgrade in
   place with no change to their data.
 - **Search stays the same on every engine.** Note titles, bodies and voice-note
   transcripts are reduced to French word stems with accents folded, so a plural
